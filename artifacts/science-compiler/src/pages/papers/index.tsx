@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useListPapers, getListPapersQueryKey, useListTopics, getListTopicsQueryKey } from "@workspace/api-client-react";
+import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,30 +19,34 @@ export default function PapersPage() {
   const [methodologyType, setMethodologyType] = useState<string | undefined>(undefined);
   const [evidenceQuality, setEvidenceQuality] = useState<string | undefined>(undefined);
   const [replicationStatus, setReplicationStatus] = useState<string | undefined>(undefined);
+  const [domain, setDomain] = useState<string | undefined>(undefined);
 
   const params = {
     search: search || undefined,
     methodologyType: methodologyType || undefined,
     evidenceQuality: evidenceQuality || undefined,
     replicationStatus: replicationStatus || undefined,
+    domain: domain || undefined,
     limit: 30,
   };
 
-  const { data, isLoading } = useListPapers(params, {
+  const { data, isLoading, isError, error } = useListPapers(params, {
     query: { queryKey: getListPapersQueryKey(params) },
   });
 
   const { data: topics } = useListTopics({ query: { queryKey: getListTopicsQueryKey() } });
   const topicMap = Object.fromEntries((topics ?? []).map(t => [t.id, t.name]));
+  const domains = Array.from(new Set((topics ?? []).map(t => t.domain))).sort();
 
   function clearFilters() {
     setSearch("");
     setMethodologyType(undefined);
     setEvidenceQuality(undefined);
     setReplicationStatus(undefined);
+    setDomain(undefined);
   }
 
-  const hasFilters = !!search || !!methodologyType || !!evidenceQuality || !!replicationStatus;
+  const hasFilters = !!search || !!methodologyType || !!evidenceQuality || !!replicationStatus || !!domain;
 
   return (
     <div className="max-w-6xl mx-auto p-8">
@@ -99,6 +104,18 @@ export default function PapersPage() {
           </SelectContent>
         </Select>
 
+        <Select value={domain ?? "all"} onValueChange={(v) => setDomain(v === "all" ? undefined : v)}>
+          <SelectTrigger className="w-44" data-testid="select-domain">
+            <SelectValue placeholder="Domain" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All domains</SelectItem>
+            {domains.map(d => (
+              <SelectItem key={d} value={d}>{d}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {hasFilters && (
           <button onClick={clearFilters} className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="button-clear-filters">
             Clear filters
@@ -114,7 +131,13 @@ export default function PapersPage() {
       )}
 
       {/* Papers list */}
-      {isLoading ? (
+      {isError ? (
+        <div className="p-12 text-center border border-destructive/30 bg-destructive/5 rounded-lg" data-testid="error-papers">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+          <p className="font-medium text-destructive">Could not load papers.</p>
+          <p className="text-sm text-muted-foreground mt-1">{error instanceof Error ? error.message : "An unexpected error occurred."}</p>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-28 w-full" />)}
         </div>

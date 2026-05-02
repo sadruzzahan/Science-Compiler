@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Search, ArrowRight, TrendingUp, FileText, Layers } from "lucide-react";
+import { Search, ArrowRight, TrendingUp, FileText, Layers, AlertTriangle } from "lucide-react";
 import { ConsensusBadge, EvidenceQualityBadge } from "@/components/badges";
 
 function StatCard({ label, value, isLoading }: { label: string; value?: number; isLoading: boolean }) {
@@ -36,7 +36,7 @@ export default function QueryPage() {
     query: { queryKey: getGetRecentActivityQueryKey() },
   });
 
-  const { data: queryResult, isLoading: queryLoading } = useQueryKnowledgeBase(
+  const { data: queryResult, isLoading: queryLoading, isError: queryError, error: queryErrorObj } = useQueryKnowledgeBase(
     { q: submittedQuery },
     { query: { enabled: !!submittedQuery, queryKey: getQueryKnowledgeBaseQueryKey({ q: submittedQuery }) } }
   );
@@ -112,7 +112,13 @@ export default function QueryPage() {
       {/* Query results */}
       {submittedQuery && (
         <div className="mb-10">
-          {queryLoading ? (
+          {queryError ? (
+            <div className="p-12 text-center border border-destructive/30 bg-destructive/5 rounded-lg" data-testid="error-query">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+              <p className="font-medium text-destructive">Query failed.</p>
+              <p className="text-sm text-muted-foreground mt-1">{queryErrorObj instanceof Error ? queryErrorObj.message : "An unexpected error occurred."}</p>
+            </div>
+          ) : queryLoading ? (
             <div className="space-y-4">
               <Skeleton className="h-6 w-48" />
               <Skeleton className="h-32 w-full" />

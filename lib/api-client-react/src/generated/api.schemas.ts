@@ -501,6 +501,29 @@ export interface RecentActivity {
   stats: TopicsStats;
 }
 
+export type ListEvidenceLinksParams = {
+  /**
+   * @nullable
+   */
+  claimId?: number | null;
+  /**
+   * @nullable
+   */
+  studyId?: number | null;
+  /**
+   * @nullable
+   */
+  direction?: string | null;
+  /**
+   * @nullable
+   */
+  limit?: number | null;
+  /**
+   * @nullable
+   */
+  offset?: number | null;
+};
+
 export type ListPapersParams = {
   /**
    * @nullable
@@ -518,6 +541,11 @@ export type ListPapersParams = {
    * @nullable
    */
   replicationStatus?: string | null;
+  /**
+   * Filter papers by topic domain (e.g. "Endocrinology")
+   * @nullable
+   */
+  domain?: string | null;
   /**
    * @nullable
    */

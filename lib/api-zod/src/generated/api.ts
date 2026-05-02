@@ -132,6 +132,29 @@ export const GetClaimSynthesisResponse = zod.object({
 });
 
 /**
+ * @summary List evidence links with optional filtering
+ */
+export const ListEvidenceLinksQueryParams = zod.object({
+  claimId: zod.coerce.number().nullish(),
+  studyId: zod.coerce.number().nullish(),
+  direction: zod.coerce.string().nullish(),
+  limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
+});
+
+export const ListEvidenceLinksResponseItem = zod.object({
+  id: zod.number(),
+  claimId: zod.number(),
+  studyId: zod.number(),
+  direction: zod.string(),
+  contradictionExplanation: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListEvidenceLinksResponse = zod.array(
+  ListEvidenceLinksResponseItem,
+);
+
+/**
  * @summary Create a new evidence link
  */
 export const CreateEvidenceLinkBody = zod.object({
@@ -203,6 +226,10 @@ export const ListPapersQueryParams = zod.object({
   methodologyType: zod.coerce.string().nullish(),
   evidenceQuality: zod.coerce.string().nullish(),
   replicationStatus: zod.coerce.string().nullish(),
+  domain: zod.coerce
+    .string()
+    .nullish()
+    .describe('Filter papers by topic domain (e.g. \"Endocrinology\")'),
   search: zod.coerce.string().nullish(),
   limit: zod.coerce.number().nullish(),
   offset: zod.coerce.number().nullish(),

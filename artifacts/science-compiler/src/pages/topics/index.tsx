@@ -3,13 +3,14 @@ import { useGetTopicsStats, getGetTopicsStatsQueryKey, useListTopics, getListTop
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { AlertTriangle } from "lucide-react";
 
 export default function TopicsPage() {
   const { data: stats, isLoading: statsLoading } = useGetTopicsStats({
     query: { queryKey: getGetTopicsStatsQueryKey() }
   });
 
-  const { data: topics, isLoading: topicsLoading } = useListTopics({
+  const { data: topics, isLoading: topicsLoading, isError: topicsError, error: topicsErrorObj } = useListTopics({
     query: { queryKey: getListTopicsQueryKey() }
   });
 
@@ -55,7 +56,13 @@ export default function TopicsPage() {
         </Card>
       </div>
 
-      {topicsLoading ? (
+      {topicsError ? (
+        <div className="p-12 text-center border border-destructive/30 bg-destructive/5 rounded-lg" data-testid="error-topics">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+          <p className="font-medium text-destructive">Could not load topics.</p>
+          <p className="text-sm text-muted-foreground mt-1">{topicsErrorObj instanceof Error ? topicsErrorObj.message : "An unexpected error occurred."}</p>
+        </div>
+      ) : topicsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <Card key={i} className="flex flex-col h-[200px]">

@@ -19,13 +19,14 @@ router.get("/papers", async (req, res): Promise<void> => {
     return;
   }
 
-  const { topicId, methodologyType, evidenceQuality, replicationStatus, search, limit = 20, offset = 0 } = query.data;
+  const { topicId, methodologyType, evidenceQuality, replicationStatus, domain, search, limit = 20, offset = 0 } = query.data;
 
   const conditions: SQL[] = [];
   if (topicId != null) conditions.push(eq(papersTable.topicId, topicId));
   if (methodologyType) conditions.push(eq(papersTable.methodologyType, methodologyType));
   if (evidenceQuality) conditions.push(eq(papersTable.evidenceQuality, evidenceQuality));
   if (replicationStatus) conditions.push(eq(papersTable.replicationStatus, replicationStatus));
+  if (domain) conditions.push(sql`${papersTable.topicId} IN (SELECT id FROM ${topicsTable} WHERE ${topicsTable.domain} = ${domain})`);
   if (search) conditions.push(ilike(papersTable.title, `%${search}%`));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

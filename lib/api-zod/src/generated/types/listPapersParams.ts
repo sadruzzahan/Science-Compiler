@@ -24,6 +24,11 @@ export type ListPapersParams = {
    */
   replicationStatus?: string | null;
   /**
+   * Filter papers by topic domain (e.g. "Endocrinology")
+   * @nullable
+   */
+  domain?: string | null;
+  /**
    * @nullable
    */
   search?: string | null;

@@ -158,6 +158,40 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /evidence-links:
+    get:
+      operationId: listEvidenceLinks
+      tags: [evidence-links]
+      summary: List evidence links with optional filtering
+      parameters:
+        - name: claimId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: studyId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: direction
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of evidence links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvidenceLink"
     post:
       operationId: createEvidenceLink
       tags: [evidence]
@@ -247,6 +281,11 @@ paths:
             type: ["string", "null"]
         - name: replicationStatus
           in: query
+          schema:
+            type: ["string", "null"]
+        - name: domain
+          in: query
+          description: Filter papers by topic domain (e.g. "Endocrinology")
           schema:
             type: ["string", "null"]
         - name: search

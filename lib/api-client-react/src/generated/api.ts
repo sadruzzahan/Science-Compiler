@@ -30,6 +30,7 @@ import type {
   EvidenceLink,
   HealthStatus,
   ListClaimsParams,
+  ListEvidenceLinksParams,
   ListPapersParams,
   Paper,
   PaperDetail,
@@ -627,6 +628,103 @@ export function useGetClaimSynthesis<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetClaimSynthesisQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List evidence links with optional filtering
+ */
+export const getListEvidenceLinksUrl = (params?: ListEvidenceLinksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/evidence-links?${stringifiedParams}`
+    : `/api/evidence-links`;
+};
+
+export const listEvidenceLinks = async (
+  params?: ListEvidenceLinksParams,
+  options?: RequestInit,
+): Promise<EvidenceLink[]> => {
+  return customFetch<EvidenceLink[]>(getListEvidenceLinksUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEvidenceLinksQueryKey = (
+  params?: ListEvidenceLinksParams,
+) => {
+  return [`/api/evidence-links`, ...(params ? [params] : [])] as const;
+};
+
+export const getListEvidenceLinksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEvidenceLinks>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListEvidenceLinksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEvidenceLinks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListEvidenceLinksQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEvidenceLinks>>
+  > = ({ signal }) => listEvidenceLinks(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEvidenceLinks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListEvidenceLinksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEvidenceLinks>>
+>;
+export type ListEvidenceLinksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List evidence links with optional filtering
+ */
+
+export function useListEvidenceLinks<
+  TData = Awaited<ReturnType<typeof listEvidenceLinks>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListEvidenceLinksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEvidenceLinks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListEvidenceLinksQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

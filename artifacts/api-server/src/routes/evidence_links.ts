@@ -1,9 +1,22 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, type SQL } from "drizzle-orm";
 import { db, evidenceLinksTable } from "@workspace/db";
-import { CreateEvidenceLinkBody, UpdateEvidenceLinkBody } from "@workspace/api-zod";
+import { CreateEvidenceLinkBody, UpdateEvidenceLinkBody, ListEvidenceLinksQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+router.get("/evidence-links", async (req, res): Promise<void> => {
+  const query = ListEvidenceLinksQueryParams.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: query.error.message }); return; }
+  const { claimId, studyId, direction, limit = 50, offset = 0 } = query.data;
+  const conditions: SQL[] = [];
+  if (claimId != null) conditions.push(eq(evidenceLinksTable.claimId, claimId));
+  if (studyId != null) conditions.push(eq(evidenceLinksTable.studyId, studyId));
+  if (direction) conditions.push(eq(evidenceLinksTable.direction, direction));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const links = await db.select().from(evidenceLinksTable).where(whereClause).limit(limit ?? 50).offset(offset ?? 0);
+  res.json(links.map(l => ({ ...l, createdAt: l.createdAt.toISOString() })));
+});
 
 type EvidenceLinkInsert = typeof evidenceLinksTable.$inferInsert;
 function stripLink(d: Record<string, unknown>): Partial<EvidenceLinkInsert> {

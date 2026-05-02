@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Search, FlaskConical } from "lucide-react";
+import { Search, FlaskConical, AlertTriangle } from "lucide-react";
 import { ConsensusBadge, EvidenceQualityBadge } from "@/components/badges";
 
 const CONSENSUS_OPTIONS = ["well-established", "contested", "preliminary", "insufficient evidence"];
@@ -27,7 +27,7 @@ export default function ClaimsPage() {
     limit: 30,
   };
 
-  const { data, isLoading } = useListClaims(params, {
+  const { data, isLoading, isError, error } = useListClaims(params, {
     query: { queryKey: getListClaimsQueryKey(params) },
   });
 
@@ -100,7 +100,13 @@ export default function ClaimsPage() {
         <div className="text-sm text-muted-foreground mb-4">{data.total} claim{data.total !== 1 ? "s" : ""} found</div>
       )}
 
-      {isLoading ? (
+      {isError ? (
+        <div className="p-12 text-center border border-destructive/30 bg-destructive/5 rounded-lg" data-testid="error-claims">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+          <p className="font-medium text-destructive">Could not load claims.</p>
+          <p className="text-sm text-muted-foreground mt-1">{error instanceof Error ? error.message : "An unexpected error occurred."}</p>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
