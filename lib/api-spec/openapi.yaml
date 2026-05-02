@@ -160,7 +160,7 @@ paths:
   /evidence-links:
     get:
       operationId: listEvidenceLinks
-      tags: [evidence-links]
+      tags: [evidence]
       summary: List evidence links with optional filtering
       parameters:
         - name: claimId
