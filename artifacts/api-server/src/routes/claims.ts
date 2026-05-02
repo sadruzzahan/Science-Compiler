@@ -24,6 +24,7 @@ router.get("/claims", async (req, res): Promise<void> => {
   if (evidenceQuality) conditions.push(eq(claimsTable.evidenceQuality, evidenceQuality));
   if (direction) conditions.push(eq(claimsTable.direction, direction));
   if (search) conditions.push(ilike(claimsTable.claimText, `%${search}%`));
+  if (consensusStatus) conditions.push(eq(claimSynthesisTable.consensusStatus, consensusStatus));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -56,17 +57,13 @@ router.get("/claims", async (req, res): Promise<void> => {
     .limit(limit ?? 20)
     .offset(offset ?? 0);
 
-  // Filter by consensusStatus after join
-  const filtered = consensusStatus
-    ? claimsRaw.filter(c => c.consensusStatus === consensusStatus)
-    : claimsRaw;
-
   const [totalRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(claimsTable)
+    .leftJoin(claimSynthesisTable, eq(claimsTable.id, claimSynthesisTable.claimId))
     .where(whereClause);
 
-  const claims = filtered.map(c => ({
+  const claims = claimsRaw.map(c => ({
     ...c,
     topicName: c.topicName ?? "Unknown",
     createdAt: c.createdAt.toISOString(),

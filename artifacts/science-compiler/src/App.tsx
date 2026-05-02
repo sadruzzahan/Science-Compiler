@@ -4,16 +4,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout";
-
-// Temporary stubs for pages
-function Home() { return <div className="p-8"><h1 className="text-2xl font-bold">Query Knowledge Base</h1><p>Search interface coming soon.</p></div>; }
-function TopicDetail({ params }: { params: { id: string } }) { return <div className="p-8">Topic Detail {params.id}</div>; }
-function PapersList() { return <div className="p-8">Papers List</div>; }
-function PaperDetail({ params }: { params: { id: string } }) { return <div className="p-8">Paper Detail {params.id}</div>; }
-function ClaimsList() { return <div className="p-8">Claims List</div>; }
-function ClaimDetail({ params }: { params: { id: string } }) { return <div className="p-8">Claim Detail {params.id}</div>; }
-
-import TopicsPage from "@/pages/topics/index";
+import QueryPage from "@/pages/query";
+import TopicsPage from "@/pages/topics";
+import TopicDetailPage from "@/pages/topics/detail";
+import PapersPage from "@/pages/papers";
+import PaperDetailPage from "@/pages/papers/detail";
+import ClaimsPage from "@/pages/claims";
+import ClaimDetailPage from "@/pages/claims/detail";
 
 const queryClient = new QueryClient();
 
@@ -21,13 +18,13 @@ function Router() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/" component={QueryPage} />
         <Route path="/topics" component={TopicsPage} />
-        <Route path="/topics/:id" component={TopicDetail} />
-        <Route path="/papers" component={PapersList} />
-        <Route path="/papers/:id" component={PaperDetail} />
-        <Route path="/claims" component={ClaimsList} />
-        <Route path="/claims/:id" component={ClaimDetail} />
+        <Route path="/topics/:id" component={TopicDetailPage} />
+        <Route path="/papers" component={PapersPage} />
+        <Route path="/papers/:id" component={PaperDetailPage} />
+        <Route path="/claims" component={ClaimsPage} />
+        <Route path="/claims/:id" component={ClaimDetailPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

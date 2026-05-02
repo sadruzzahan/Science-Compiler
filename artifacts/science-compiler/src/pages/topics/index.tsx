@@ -1,4 +1,3 @@
-import { useState } from "wouter";
 import { Link } from "wouter";
 import { useGetTopicsStats, getGetTopicsStatsQueryKey, useListTopics, getListTopicsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

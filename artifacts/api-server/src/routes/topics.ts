@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, topicsTable, papersTable, claimsTable, claimSynthesisTable } from "@workspace/db";
+import { db, topicsTable, papersTable, claimsTable, claimSynthesisTable, studiesTable } from "@workspace/db";
 import {
   GetTopicParams,
   GetTopicResponse,
@@ -16,7 +16,7 @@ router.get("/topics/stats", async (_req, res): Promise<void> => {
   const [topicCount] = await db.select({ count: sql<number>`count(*)::int` }).from(topicsTable);
   const [claimCount] = await db.select({ count: sql<number>`count(*)::int` }).from(claimsTable);
   const [paperCount] = await db.select({ count: sql<number>`count(*)::int` }).from(papersTable);
-  const [studyCount] = await db.select({ count: sql<number>`count(*)::int` }).from(papersTable);
+  const [studyCount] = await db.select({ count: sql<number>`count(*)::int` }).from(studiesTable);
 
   const synthesisCounts = await db
     .select({
