@@ -3,13 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Science Compiler API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: topics
+    description: Topic operations
+  - name: papers
+    description: Paper operations
+  - name: claims
+    description: Claim operations
+  - name: studies
+    description: Study operations
+  - name: evidence
+    description: Evidence link operations
+  - name: synthesis
+    description: Claim synthesis operations
+  - name: query
+    description: Query operations
 paths:
   /healthz:
     get:
@@ -24,6 +38,251 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /topics:
+    get:
+      operationId: listTopics
+      tags: [topics]
+      summary: List all topics
+      responses:
+        "200":
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Topic"
+
+  /topics/{id}:
+    get:
+      operationId: getTopic
+      tags: [topics]
+      summary: Get topic by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Topic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /topics/stats:
+    get:
+      operationId: getTopicsStats
+      tags: [topics]
+      summary: Get overview stats across all topics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicsStats"
+
+  /papers:
+    get:
+      operationId: listPapers
+      tags: [papers]
+      summary: List papers with optional filtering
+      parameters:
+        - name: topicId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: methodologyType
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: evidenceQuality
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: replicationStatus
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of papers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PapersListResponse"
+
+  /papers/{id}:
+    get:
+      operationId: getPaper
+      tags: [papers]
+      summary: Get paper by ID with its claims
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paper with claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /claims:
+    get:
+      operationId: listClaims
+      tags: [claims]
+      summary: List claims with optional filtering
+      parameters:
+        - name: topicId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: consensusStatus
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: evidenceQuality
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: direction
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of claims with synthesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimsListResponse"
+
+  /claims/{id}:
+    get:
+      operationId: getClaim
+      tags: [claims]
+      summary: Get claim by ID with full evidence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Claim with full evidence breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /studies/{id}:
+    get:
+      operationId: getStudy
+      tags: [studies]
+      summary: Get study by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Study
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Study"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /query:
+    get:
+      operationId: queryKnowledgeBase
+      tags: [query]
+      summary: Query the knowledge base with natural language
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Query result with best-matching synthesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+
+  /query/recent:
+    get:
+      operationId: getRecentActivity
+      tags: [query]
+      summary: Get recently added claims and papers across all topics
+      responses:
+        "200":
+          description: Recent activity feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentActivity"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +293,629 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Topic:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        domain:
+          type: string
+        claimCount:
+          type: integer
+        paperCount:
+          type: integer
+        wellEstablishedCount:
+          type: integer
+        contestedCount:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - domain
+        - claimCount
+        - paperCount
+        - wellEstablishedCount
+        - contestedCount
+        - createdAt
+
+    TopicDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        domain:
+          type: string
+        claimCount:
+          type: integer
+        paperCount:
+          type: integer
+        wellEstablishedCount:
+          type: integer
+        contestedCount:
+          type: integer
+        preliminaryCount:
+          type: integer
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimSummary"
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - domain
+        - claimCount
+        - paperCount
+        - wellEstablishedCount
+        - contestedCount
+        - preliminaryCount
+        - claims
+        - createdAt
+
+    TopicsStats:
+      type: object
+      properties:
+        totalTopics:
+          type: integer
+        totalClaims:
+          type: integer
+        totalPapers:
+          type: integer
+        totalStudies:
+          type: integer
+        wellEstablishedCount:
+          type: integer
+        contestedCount:
+          type: integer
+        preliminaryCount:
+          type: integer
+        recentPapers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperSummary"
+      required:
+        - totalTopics
+        - totalClaims
+        - totalPapers
+        - totalStudies
+        - wellEstablishedCount
+        - contestedCount
+        - preliminaryCount
+        - recentPapers
+
+    Paper:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        journal:
+          type: string
+        publicationYear:
+          type: integer
+        doi:
+          type: ["string", "null"]
+        pmid:
+          type: ["string", "null"]
+        abstract:
+          type: string
+        methodologyType:
+          type: string
+        sampleSize:
+          type: ["integer", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        openAccessUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - topicId
+        - title
+        - authors
+        - journal
+        - publicationYear
+        - abstract
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - createdAt
+
+    PaperSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        journal:
+          type: string
+        publicationYear:
+          type: integer
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        topicName:
+          type: string
+      required:
+        - id
+        - title
+        - authors
+        - journal
+        - publicationYear
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - topicName
+
+    PaperDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        topicName:
+          type: string
+        title:
+          type: string
+        authors:
+          type: string
+        journal:
+          type: string
+        publicationYear:
+          type: integer
+        doi:
+          type: ["string", "null"]
+        pmid:
+          type: ["string", "null"]
+        abstract:
+          type: string
+        methodologyType:
+          type: string
+        sampleSize:
+          type: ["integer", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        openAccessUrl:
+          type: ["string", "null"]
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimSummary"
+        createdAt:
+          type: string
+      required:
+        - id
+        - topicId
+        - topicName
+        - title
+        - authors
+        - journal
+        - publicationYear
+        - abstract
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - claims
+        - createdAt
+
+    PapersListResponse:
+      type: object
+      properties:
+        papers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Paper"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - papers
+        - total
+        - limit
+        - offset
+
+    ClaimSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        claimText:
+          type: string
+        direction:
+          type: string
+        evidenceQuality:
+          type: string
+        consensusStatus:
+          type: ["string", "null"]
+        supportingCount:
+          type: ["integer", "null"]
+        contradictingCount:
+          type: ["integer", "null"]
+        topicName:
+          type: ["string", "null"]
+      required:
+        - id
+        - claimText
+        - direction
+        - evidenceQuality
+
+    Claim:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        paperId:
+          type: integer
+        claimText:
+          type: string
+        direction:
+          type: string
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        population:
+          type: string
+        conditions:
+          type: ["string", "null"]
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        nReplications:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - topicId
+        - paperId
+        - claimText
+        - direction
+        - population
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - nReplications
+        - createdAt
+
+    ClaimsListResponse:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimWithSynthesis"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - claims
+        - total
+        - limit
+        - offset
+
+    ClaimWithSynthesis:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        topicName:
+          type: string
+        paperId:
+          type: integer
+        claimText:
+          type: string
+        direction:
+          type: string
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        population:
+          type: string
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        nReplications:
+          type: integer
+        consensusStatus:
+          type: ["string", "null"]
+        supportingCount:
+          type: ["integer", "null"]
+        contradictingCount:
+          type: ["integer", "null"]
+        uncertaintyScore:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - topicId
+        - topicName
+        - paperId
+        - claimText
+        - direction
+        - population
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - nReplications
+        - createdAt
+
+    ClaimDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        topicName:
+          type: string
+        paperId:
+          type: integer
+        paperTitle:
+          type: string
+        claimText:
+          type: string
+        direction:
+          type: string
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        population:
+          type: string
+        conditions:
+          type: ["string", "null"]
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: string
+        nReplications:
+          type: integer
+        synthesis:
+          $ref: "#/components/schemas/ClaimSynthesis"
+        supportingStudies:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceLinkWithStudy"
+        contradictingStudies:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceLinkWithStudy"
+        createdAt:
+          type: string
+      required:
+        - id
+        - topicId
+        - topicName
+        - paperId
+        - paperTitle
+        - claimText
+        - direction
+        - population
+        - methodologyType
+        - evidenceQuality
+        - replicationStatus
+        - nReplications
+        - supportingStudies
+        - contradictingStudies
+        - createdAt
+
+    ClaimSynthesis:
+      type: object
+      properties:
+        id:
+          type: integer
+        claimId:
+          type: integer
+        consensusStatus:
+          type: string
+        synthesisText:
+          type: string
+        supportingCount:
+          type: integer
+        contradictingCount:
+          type: integer
+        weightedEffectSize:
+          type: ["number", "null"]
+        uncertaintyScore:
+          type: integer
+        moderatingVariables:
+          type: ["string", "null"]
+        methodologicalConcerns:
+          type: ["string", "null"]
+        temporalTrend:
+          type: ["string", "null"]
+        lastUpdated:
+          type: string
+      required:
+        - id
+        - claimId
+        - consensusStatus
+        - synthesisText
+        - supportingCount
+        - contradictingCount
+        - uncertaintyScore
+        - lastUpdated
+
+    Study:
+      type: object
+      properties:
+        id:
+          type: integer
+        paperId:
+          type: integer
+        topicId:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        publicationYear:
+          type: integer
+        methodologyType:
+          type: string
+        sampleSize:
+          type: ["integer", "null"]
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: string
+        population:
+          type: string
+        preregistered:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - paperId
+        - topicId
+        - title
+        - authors
+        - publicationYear
+        - methodologyType
+        - evidenceQuality
+        - population
+        - preregistered
+        - createdAt
+
+    EvidenceLinkWithStudy:
+      type: object
+      properties:
+        id:
+          type: integer
+        claimId:
+          type: integer
+        studyId:
+          type: integer
+        direction:
+          type: string
+        contradictionExplanation:
+          type: ["string", "null"]
+        study:
+          $ref: "#/components/schemas/Study"
+      required:
+        - id
+        - claimId
+        - studyId
+        - direction
+        - study
+
+    QueryResult:
+      type: object
+      properties:
+        query:
+          type: string
+        matchedClaim:
+          $ref: "#/components/schemas/ClaimDetail"
+        relatedClaims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimSummary"
+        noResults:
+          type: boolean
+      required:
+        - query
+        - noResults
+
+    RecentActivity:
+      type: object
+      properties:
+        recentClaims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimWithSynthesis"
+        recentPapers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperSummary"
+        stats:
+          $ref: "#/components/schemas/TopicsStats"
+      required:
+        - recentClaims
+        - recentPapers
+        - stats

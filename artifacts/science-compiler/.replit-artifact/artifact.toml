@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Science Compiler"
+version = "1.0.0"
+id = "artifacts/science-compiler"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24892
+
+[services.development]
+run = "pnpm --filter @workspace/science-compiler run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/science-compiler", "run", "build" ]
+publicDir = "artifacts/science-compiler/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24892"
+BASE_PATH = "/"
