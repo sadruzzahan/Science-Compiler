@@ -6,6 +6,9 @@ import {
   ListClaimsResponse,
   GetClaimParams,
   GetClaimResponse,
+  CreateClaimBody,
+  UpdateClaimBody,
+  GetClaimSynthesisResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -156,6 +159,50 @@ router.get("/claims/:id", async (req, res): Promise<void> => {
   };
 
   res.json(GetClaimResponse.parse(result));
+});
+
+router.get("/claims/:id/synthesis", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const [synthesis] = await db.select().from(claimSynthesisTable).where(eq(claimSynthesisTable.claimId, id));
+  if (!synthesis) { res.status(404).json({ error: "Synthesis not found" }); return; }
+  res.json(GetClaimSynthesisResponse.parse({
+    ...synthesis,
+    lastUpdated: synthesis.lastUpdated.toISOString(),
+    createdAt: synthesis.createdAt.toISOString(),
+  }));
+});
+
+type ClaimInsert = typeof claimsTable.$inferInsert;
+function stripClaim(d: Record<string, unknown>): Partial<ClaimInsert> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(d)) if (v !== null && v !== undefined) out[k] = v;
+  return out as Partial<ClaimInsert>;
+}
+
+router.post("/claims", async (req, res): Promise<void> => {
+  const body = CreateClaimBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [claim] = await db.insert(claimsTable).values(stripClaim(body.data) as ClaimInsert).returning();
+  res.status(201).json({ ...claim, createdAt: claim!.createdAt.toISOString(), updatedAt: claim!.updatedAt.toISOString() });
+});
+
+router.patch("/claims/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const body = UpdateClaimBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [claim] = await db.update(claimsTable).set(stripClaim(body.data)).where(eq(claimsTable.id, id)).returning();
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  res.json({ ...claim, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
+});
+
+router.delete("/claims/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const result = await db.delete(claimsTable).where(eq(claimsTable.id, id)).returning({ id: claimsTable.id });
+  if (result.length === 0) { res.status(404).json({ error: "Claim not found" }); return; }
+  res.status(204).send();
 });
 
 export default router;

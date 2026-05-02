@@ -1,4 +1,152 @@
 import { db, pool, topicsTable, papersTable, claimsTable, studiesTable, evidenceLinksTable, claimSynthesisTable } from "./index";
+import type { InsertPaper, InsertClaim } from "./index";
+
+type ClaimSpec = Omit<InsertClaim, "topicId" | "paperId"> & {
+  paperIdx: number;
+  supporting: number;
+  contradicting: number;
+  synthesisText: string;
+  consensus: "well-established" | "contested" | "preliminary";
+  uncertainty: number;
+  moderatingVariables: string;
+  methodologicalConcerns: string;
+  temporalTrend: string;
+};
+
+type TopicSpec = {
+  topic: { name: string; slug: string; description: string; domain: string };
+  papers: Omit<InsertPaper, "topicId">[];
+  claims: ClaimSpec[];
+};
+
+const TOPICS: TopicSpec[] = [
+  // ========== TOPIC 1: Coffee & Diabetes ==========
+  {
+    topic: {
+      name: "Coffee Consumption and Type 2 Diabetes Risk",
+      slug: "coffee-diabetes",
+      description: "How habitual coffee consumption affects the risk of developing type 2 diabetes, including dose-response, decaf vs caffeinated, and metabolic mechanisms.",
+      domain: "Endocrinology",
+    },
+    papers: [
+      { title: "Coffee consumption and risk of type 2 diabetes: a systematic review and dose-response meta-analysis", authors: "Ding M, Bhupathiraju SN, Chen M, et al.", journal: "Diabetes Care", publicationYear: 2014, doi: "10.2337/dc13-1539", pmid: "24459154", abstract: "Pooled analysis of 28 prospective studies (1,109,272 participants). Each additional cup per day was associated with a 9% lower risk of type 2 diabetes (RR 0.91, 95% CI 0.89-0.94).", methodologyType: "meta-analysis", sampleSize: 1109272, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed", openAccessUrl: "https://care.diabetesjournals.org/content/37/2/569" },
+      { title: "Decaffeinated coffee consumption and the risk of type 2 diabetes mellitus", authors: "Huxley R, Lee CM, Barzi F, et al.", journal: "Archives of Internal Medicine", publicationYear: 2009, doi: "10.1001/archinternmed.2009.439", pmid: "20008687", abstract: "Meta-analysis showed decaffeinated coffee was inversely associated with diabetes risk (RR 0.64, 95% CI 0.54-0.75 for high vs low intake), suggesting non-caffeine compounds drive the protective effect.", methodologyType: "meta-analysis", sampleSize: 457922, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Coffee, glucose homeostasis and insulin resistance: physiological mechanisms", authors: "Kempf K, Herder C, Erlund I, et al.", journal: "American Journal of Clinical Nutrition", publicationYear: 2010, doi: "10.3945/ajcn.2009.28548", pmid: "20007811", abstract: "RCT of 47 habitual coffee drinkers showed that 8 weeks of coffee consumption reduced inflammatory markers and improved HDL cholesterol but did not significantly change insulin sensitivity.", methodologyType: "rct", sampleSize: 47, pValue: "0.04", evidenceQuality: "B", replicationStatus: "partial" },
+      { title: "Caffeine intake and risk of type 2 diabetes: an updated meta-analysis", authors: "Carlström M, Larsson SC.", journal: "Nutrition Reviews", publicationYear: 2018, doi: "10.1093/nutrit/nuy014", pmid: "29871033", abstract: "Updated meta-analysis of 30 studies confirmed inverse association between coffee consumption and T2D risk; sub-analysis showed comparable effect for caffeinated and decaffeinated coffee.", methodologyType: "meta-analysis", sampleSize: 1185210, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Genetic variants in caffeine metabolism and association with coffee-related glucose metabolism", authors: "Cornelis MC, El-Sohemy A, Campos H.", journal: "Genes & Nutrition", publicationYear: 2016, doi: "10.1186/s12263-016-0533-3", pmid: "27708724", abstract: "Mendelian randomization in 47,000 participants did not support a causal effect of caffeine intake per se on fasting glucose, suggesting non-caffeine constituents drive observational associations.", methodologyType: "observational", sampleSize: 47000, pValue: "0.34", evidenceQuality: "B", replicationStatus: "unverified" },
+    ],
+    claims: [
+      { paperIdx: 0, claimText: "Habitual coffee consumption is associated with a reduced risk of type 2 diabetes in adults", direction: "protective", effectSize: 0.91, effectSizeUnit: "RR per cup/day", ciLower: 0.89, ciUpper: 0.94, population: "Adults (general population)", conditions: "Both caffeinated and decaffeinated coffee show similar effects", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 7, supporting: 5, contradicting: 1, consensus: "well-established", uncertainty: 18, synthesisText: "Strong, consistent evidence from over 1.1 million participants across 28 prospective cohorts shows a graded inverse association between coffee intake and type 2 diabetes risk. Each additional cup per day reduces relative risk by approximately 9%. The effect is observed for both caffeinated and decaffeinated coffee, and persists across diverse populations and follow-up durations.", moderatingVariables: "Effect is robust across BMI, baseline diabetes risk, and ethnicity. Sex modifies magnitude slightly (stronger in women).", methodologicalConcerns: "Self-reported intake introduces measurement error. Residual confounding by overall diet quality is possible despite extensive adjustment.", temporalTrend: "Effect estimates have remained stable across studies published between 2002 and 2018." },
+      { paperIdx: 1, claimText: "Decaffeinated coffee provides similar diabetes-protective effects as caffeinated coffee", direction: "protective", effectSize: 0.64, effectSizeUnit: "RR high vs low intake", ciLower: 0.54, ciUpper: 0.75, population: "Adults (general population)", conditions: "Suggests chlorogenic acid and other polyphenols mediate the effect", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 5, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 22, synthesisText: "Multiple cohort studies indicate that the protective association is not driven primarily by caffeine. Decaffeinated coffee shows comparable, sometimes stronger, inverse associations with type 2 diabetes risk. This points to non-caffeine constituents such as chlorogenic acid as likely active compounds.", moderatingVariables: "Brewing method affects polyphenol content; filtered preparations associated with strongest effects.", methodologicalConcerns: "Decaf consumers may differ systematically from caffeinated coffee drinkers in lifestyle factors not fully captured.", temporalTrend: "Pattern has been replicated in newer cohorts including UK Biobank and EPIC-InterAct." },
+      { paperIdx: 2, claimText: "Short-term coffee consumption acutely worsens insulin sensitivity in caffeine-naive individuals", direction: "harmful", effectSize: 1.15, effectSizeUnit: "fold change in insulin response", ciLower: 1.05, ciUpper: 1.27, population: "Caffeine-naive adults", conditions: "Acute effect, attenuates within 1-2 weeks of regular consumption", methodologyType: "rct", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 2, consensus: "contested", uncertainty: 48, synthesisText: "Acute caffeine exposure transiently impairs insulin-mediated glucose disposal in metabolic studies, but tolerance develops with regular use. The clinical relevance of this acute effect is debated, and the long-term direction of association remains protective.", moderatingVariables: "Habitual caffeine exposure, time of day, and concomitant carbohydrate intake all modify the acute response.", methodologicalConcerns: "Most acute studies use small samples and supraphysiologic caffeine doses; ecological validity is limited.", temporalTrend: "Newer studies use ambulatory monitoring and find smaller effect sizes than older laboratory studies." },
+      { paperIdx: 3, claimText: "The dose-response between coffee and diabetes risk is non-linear with maximum benefit at 4-5 cups per day", direction: "protective", effectSize: 0.71, effectSizeUnit: "RR at 4 cups vs 0", ciLower: 0.65, ciUpper: 0.78, population: "Adults", conditions: "Curve flattens beyond 5 cups; harms not observed up to 8 cups", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 6, supporting: 5, contradicting: 0, consensus: "well-established", uncertainty: 20, synthesisText: "Dose-response meta-analyses consistently show a non-linear inverse relationship. Risk reduction accelerates from 1-4 cups per day, plateaus around 5 cups, and remains stable at higher intakes without evidence of harm for diabetes outcomes specifically.", moderatingVariables: "Cup size standardization (typically 150 mL) varies between studies. Smoking status interacts with the high-intake range.", methodologicalConcerns: "Few participants consume more than 6 cups per day, limiting precision at the high end of the curve.", temporalTrend: "Curve shape has been replicated in independent meta-analyses 5+ years apart." },
+      { paperIdx: 4, claimText: "Caffeine itself does not causally reduce diabetes risk in Mendelian randomization analyses", direction: "neutral", effectSize: 1.02, effectSizeUnit: "OR per allele increasing caffeine", ciLower: 0.95, ciUpper: 1.10, population: "Adults of European ancestry", conditions: "Genetic instruments for caffeine metabolism via CYP1A2 and AHR variants", methodologyType: "observational", evidenceQuality: "B", replicationStatus: "unverified", nReplications: 2, supporting: 2, contradicting: 1, consensus: "preliminary", uncertainty: 65, synthesisText: "Mendelian randomization studies using genetic variants in caffeine metabolism do not support a direct causal effect of caffeine on glucose homeostasis. This complements observational findings that decaf coffee is similarly protective and shifts attention to non-caffeine bioactive compounds.", moderatingVariables: "Limited to populations with characterized caffeine-metabolism variants; effect in non-European ancestries unclear.", methodologicalConcerns: "Genetic instruments capture lifelong exposure but may have weak instrument bias and pleiotropic effects.", temporalTrend: "Newer MR studies with larger biobanks confirm the null finding." },
+      { paperIdx: 0, claimText: "Effect of coffee on diabetes risk is consistent across BMI categories", direction: "protective", effectSize: 0.92, effectSizeUnit: "RR per cup/day in obese", ciLower: 0.88, ciUpper: 0.96, population: "Adults stratified by BMI", conditions: "Effect present in normal-weight, overweight, and obese subgroups", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 0, consensus: "well-established", uncertainty: 25, synthesisText: "Subgroup analyses confirm that the inverse coffee-diabetes association holds across the BMI spectrum, with similar relative risks in normal-weight and obese individuals. Absolute risk reductions are larger in higher-risk individuals.", moderatingVariables: "Absolute effect scales with baseline diabetes risk; relative effect is approximately constant.", methodologicalConcerns: "Few studies report stratified estimates with adequate power.", temporalTrend: "Pattern stable across decades of cohort studies." },
+    ],
+  },
+  // ========== TOPIC 2: Social Media & Adolescent Depression ==========
+  {
+    topic: {
+      name: "Social Media Use and Adolescent Depression",
+      slug: "social-media-depression",
+      description: "The relationship between social media usage in teenagers and the incidence of depression, anxiety, and self-harm, including dose-response and platform-specific effects.",
+      domain: "Mental Health",
+    },
+    papers: [
+      { title: "Associations between time spent using social media and internalizing and externalizing problems among US youth", authors: "Riehm KE, Feder KA, Tormohlen KN, et al.", journal: "JAMA Psychiatry", publicationYear: 2019, doi: "10.1001/jamapsychiatry.2019.2325", pmid: "31509167", abstract: "Cross-sectional study of 6,595 adolescents found that >3 hours/day of social media use was associated with elevated risk of internalizing problems (OR 1.60, 95% CI 1.32-1.93).", methodologyType: "cross-sectional", sampleSize: 6595, pValue: "<0.001", evidenceQuality: "B", replicationStatus: "confirmed" },
+      { title: "Underestimating digital media harm", authors: "Twenge JM, Haidt J, Joiner TE, Campbell WK.", journal: "Nature Human Behaviour", publicationYear: 2020, doi: "10.1038/s41562-020-0839-4", pmid: "32242128", abstract: "Reanalysis argues that small effect sizes in cross-sectional studies underestimate harm because population-level shifts in usage explain a meaningful share of rising adolescent depression.", methodologyType: "review", sampleSize: 0, pValue: null, evidenceQuality: "C", replicationStatus: "unverified" },
+      { title: "The association between adolescent well-being and digital technology use: a meta-analytic review", authors: "Orben A, Przybylski AK.", journal: "Nature Human Behaviour", publicationYear: 2019, doi: "10.1038/s41562-018-0506-1", pmid: "30899191", abstract: "Specification curve analysis across 3 datasets (n>355,000) found that digital technology use explains at most 0.4% of variance in adolescent well-being, comparable to eating potatoes.", methodologyType: "meta-analysis", sampleSize: 355358, pValue: "0.05", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Experimental evidence that social media reduces well-being", authors: "Hunt MG, Marx R, Lipson C, Young J.", journal: "Journal of Social and Clinical Psychology", publicationYear: 2018, doi: "10.1521/jscp.2018.37.10.751", pmid: null, abstract: "RCT in 143 undergraduates: limiting social media use to 30 minutes per day for 3 weeks reduced loneliness and depressive symptoms (Cohen's d = 0.36 for depression).", methodologyType: "rct", sampleSize: 143, pValue: "0.02", evidenceQuality: "B", replicationStatus: "partial" },
+      { title: "Social media use, body image, and mental health in adolescent girls", authors: "Kelly Y, Zilanawala A, Booker C, Sacker A.", journal: "EClinicalMedicine", publicationYear: 2018, doi: "10.1016/j.eclinm.2018.12.005", pmid: "31193561", abstract: "Cohort study of 10,904 14-year-olds found stronger associations between social media use and depressive symptoms in girls than boys, partly mediated by online harassment, sleep, body image and self-esteem.", methodologyType: "cohort", sampleSize: 10904, pValue: "<0.001", evidenceQuality: "B", replicationStatus: "confirmed" },
+      { title: "Image-based platforms and adolescent mental health: prospective cohort analysis", authors: "Boer M, Stevens GWJM, Finkenauer C, et al.", journal: "Journal of Youth and Adolescence", publicationYear: 2021, doi: "10.1007/s10964-020-01338-3", pmid: "33098056", abstract: "3-wave longitudinal study (n=1,613) found that image-based platforms (Instagram, Snapchat) were prospectively associated with depressive symptoms while messaging platforms were not.", methodologyType: "cohort", sampleSize: 1613, pValue: "0.003", evidenceQuality: "B", replicationStatus: "unverified" },
+    ],
+    claims: [
+      { paperIdx: 0, claimText: "Heavy social media use (>3 hours/day) is associated with increased risk of depression in adolescents", direction: "harmful", effectSize: 1.60, effectSizeUnit: "OR for internalizing problems", ciLower: 1.32, ciUpper: 1.93, population: "US adolescents 12-15", conditions: "Cross-sectional; cannot establish causality", methodologyType: "cross-sectional", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 4, supporting: 4, contradicting: 2, consensus: "contested", uncertainty: 52, synthesisText: "Cross-sectional studies consistently find associations between heavy social media use and depressive symptoms, but the direction of causality is unclear. Reverse causation (depressed adolescents using more social media) and confounding by displaced activities (sleep, in-person interaction) cannot be ruled out from observational data alone.", moderatingVariables: "Effect appears stronger in girls and in adolescents with pre-existing mental health vulnerability.", methodologicalConcerns: "Self-reported screen time is unreliable; threshold of 3 hours is arbitrary; reverse causation likely contributes to the association.", temporalTrend: "Rising effect estimates as platforms shift toward image-based content." },
+      { paperIdx: 1, claimText: "Population-level rise in adolescent depression coincides with widespread smartphone adoption", direction: "harmful", effectSize: 1.7, effectSizeUnit: "fold increase in major depression 2010-2017", ciLower: 1.5, ciUpper: 1.9, population: "US adolescents", conditions: "Population-level temporal correlation", methodologyType: "review", evidenceQuality: "C", replicationStatus: "unverified", nReplications: 2, supporting: 2, contradicting: 3, consensus: "contested", uncertainty: 70, synthesisText: "Time-series analyses show concurrent rises in adolescent depression and social media use after 2010, but causal attribution is contested. Critics argue that improved screening, reduced stigma in reporting, and other concurrent social changes contribute substantially. The ecological correlation does not establish causation at the individual level.", moderatingVariables: "Trend stronger in countries with higher smartphone penetration; effect varies substantially by region.", methodologicalConcerns: "Ecological fallacy risk; multiple concurrent confounders; reliance on diagnostic data with changing thresholds.", temporalTrend: "Rising depression rates have continued post-2020, partly attributed to pandemic effects rather than social media." },
+      { paperIdx: 2, claimText: "Effect size of digital technology use on adolescent well-being is small (<0.5% variance explained)", direction: "neutral", effectSize: 0.004, effectSizeUnit: "R-squared", ciLower: 0.001, ciUpper: 0.008, population: "Adolescents in 3 large datasets", conditions: "Specification curve analysis across many model choices", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 5, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 28, synthesisText: "Large-scale specification curve analyses with hundreds of thousands of participants converge on small effect sizes. Digital technology use explains less than 1% of variance in well-being, comparable to wearing glasses or eating potatoes. Whether this small effect is clinically meaningful at population scale remains debated.", moderatingVariables: "Effect varies substantially by measurement choice; small effects appear robust to specification.", methodologicalConcerns: "Effect size depends heavily on operationalization of both technology use and well-being; aggregate measures may obscure subgroup harm.", temporalTrend: "Effect size estimates have decreased as methodology has improved." },
+      { paperIdx: 3, claimText: "Reducing social media use by 30 minutes per day improves depressive symptoms in young adults", direction: "protective", effectSize: 0.36, effectSizeUnit: "Cohen's d for depression reduction", ciLower: 0.10, ciUpper: 0.62, population: "Undergraduate students", conditions: "3-week intervention; effect on loneliness larger than on depression", methodologyType: "rct", evidenceQuality: "B", replicationStatus: "partial", nReplications: 3, supporting: 2, contradicting: 1, consensus: "preliminary", uncertainty: 60, synthesisText: "A small number of randomized trials show modest improvements in depressive symptoms when social media use is restricted, but effect sizes vary widely and most trials are short-duration with small samples. Adherence to use limits is also poor in real-world settings.", moderatingVariables: "Larger effects in heavy users; effect modified by replacement activity.", methodologicalConcerns: "Open-label designs; demand characteristics; small samples; short follow-up.", temporalTrend: "Newer RCTs include longer follow-up and find similar small benefits." },
+      { paperIdx: 4, claimText: "Girls show stronger associations between social media use and depression than boys", direction: "harmful", effectSize: 2.06, effectSizeUnit: "OR for high-use girls vs low-use girls", ciLower: 1.69, ciUpper: 2.51, population: "UK adolescents aged 14", conditions: "Mediated by online harassment, sleep, body image, self-esteem", methodologyType: "cohort", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 4, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 30, synthesisText: "Multiple cohort studies show that the social-media-depression association is consistently larger in adolescent girls. Mediation analyses indicate online harassment, disrupted sleep, body image concerns, and self-esteem as key pathways. The pattern is robust across UK and US samples.", moderatingVariables: "Effect concentrated in image-based platforms; mediated heavily by appearance comparisons.", methodologicalConcerns: "Self-report of harassment may itself be a depressive symptom, complicating causal interpretation.", temporalTrend: "Sex difference has remained stable as platforms have evolved." },
+      { paperIdx: 5, claimText: "Image-based platforms (Instagram, Snapchat) are more strongly associated with adolescent depression than messaging platforms", direction: "harmful", effectSize: 1.45, effectSizeUnit: "standardized beta for image platform use", ciLower: 1.15, ciUpper: 1.81, population: "Adolescents 13-18", conditions: "Effect not seen for text-based messaging", methodologyType: "cohort", evidenceQuality: "B", replicationStatus: "unverified", nReplications: 2, supporting: 2, contradicting: 1, consensus: "preliminary", uncertainty: 62, synthesisText: "Emerging evidence suggests that platforms emphasizing image-based social comparison are more strongly linked with depressive symptoms than text-based or messaging platforms. The mechanism likely involves appearance comparison and idealized self-presentation, but causal evidence remains limited.", moderatingVariables: "Effect strongest for users who follow many appearance-focused accounts.", methodologicalConcerns: "Platform use changes rapidly; categorization is unstable; few longitudinal studies separate platform types.", temporalTrend: "Newer platforms (TikTok) emerging; long-term effects not yet characterized." },
+      { paperIdx: 0, claimText: "Light social media use (<1 hour/day) shows no association with adolescent depression", direction: "neutral", effectSize: 1.04, effectSizeUnit: "OR for low use vs none", ciLower: 0.91, ciUpper: 1.18, population: "US adolescents 12-15", conditions: "Threshold effect; harm primarily at heavy use levels", methodologyType: "cross-sectional", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 3, supporting: 3, contradicting: 0, consensus: "well-established", uncertainty: 32, synthesisText: "Multiple studies find no detectable harm at low levels of social media use. This dose-response pattern suggests that targeted reduction in heavy users may be more impactful than universal restrictions. The threshold for harm appears to lie somewhere between 1 and 3 hours per day.", moderatingVariables: "Threshold may be lower for vulnerable subgroups.", methodologicalConcerns: "Self-reported usage clusters at round numbers; precise thresholds may not be meaningful.", temporalTrend: "Pattern has remained stable across multiple cohorts." },
+    ],
+  },
+  // ========== TOPIC 3: SSRI Antidepressants Efficacy ==========
+  {
+    topic: {
+      name: "SSRI Antidepressants for Major Depressive Disorder",
+      slug: "ssri-depression",
+      description: "Effectiveness, comparative efficacy, and risks of selective serotonin reuptake inhibitors for major depressive disorder, including baseline severity effects and discontinuation.",
+      domain: "Psychiatry",
+    },
+    papers: [
+      { title: "Comparative efficacy and acceptability of 21 antidepressant drugs for the acute treatment of adults with major depressive disorder", authors: "Cipriani A, Furukawa TA, Salanti G, et al.", journal: "The Lancet", publicationYear: 2018, doi: "10.1016/S0140-6736(17)32802-7", pmid: "29477251", abstract: "Network meta-analysis of 522 trials (116,477 participants) found all 21 antidepressants more effective than placebo (ORs 1.37 to 2.13).", methodologyType: "meta-analysis", sampleSize: 116477, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Initial severity and antidepressant benefits: a meta-analysis of data submitted to the FDA", authors: "Kirsch I, Deacon BJ, Huedo-Medina TB, et al.", journal: "PLoS Medicine", publicationYear: 2008, doi: "10.1371/journal.pmed.0050045", pmid: "18303940", abstract: "FDA-submitted trials show drug-placebo differences increase with baseline severity but are clinically negligible for mild-to-moderate depression. Mean drug-placebo difference of 1.80 on HAM-D.", methodologyType: "meta-analysis", sampleSize: 5133, pValue: "<0.001", evidenceQuality: "B", replicationStatus: "partial" },
+      { title: "Antidepressant discontinuation symptoms: systematic review", authors: "Davies J, Read J.", journal: "Addictive Behaviors", publicationYear: 2019, doi: "10.1016/j.addbeh.2018.08.027", pmid: "30292574", abstract: "Systematic review found 56% of antidepressant users experience withdrawal symptoms, 46% of whom describe them as severe, lasting up to several months in some cases.", methodologyType: "review", sampleSize: 6000, pValue: null, evidenceQuality: "C", replicationStatus: "unverified" },
+      { title: "Long-term effectiveness of antidepressants: STAR*D trial", authors: "Rush AJ, Trivedi MH, Wisniewski SR, et al.", journal: "American Journal of Psychiatry", publicationYear: 2006, doi: "10.1176/ajp.2006.163.11.1905", pmid: "17074942", abstract: "STAR*D enrolled 4,041 outpatients. Cumulative remission rate was 67% across 4 sequential treatment steps; relapse rates were 40-71% in those who remitted.", methodologyType: "rct", sampleSize: 4041, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "SSRIs and risk of suicidality in young people: meta-analysis", authors: "Hammad TA, Laughren T, Racoosin J.", journal: "Archives of General Psychiatry", publicationYear: 2006, doi: "10.1001/archpsyc.63.3.332", pmid: "16520440", abstract: "FDA pooled analysis of 24 trials with 4,400 pediatric patients found increased risk of suicidal ideation/behavior with antidepressants vs placebo (RR 1.95, 95% CI 1.28-2.98).", methodologyType: "meta-analysis", sampleSize: 4400, pValue: "0.002", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Cognitive behavioral therapy versus antidepressants for major depression: meta-analysis", authors: "Cuijpers P, Karyotaki E, Weitz E, et al.", journal: "JAMA Psychiatry", publicationYear: 2014, doi: "10.1001/jamapsychiatry.2013.4097", pmid: "24500823", abstract: "Meta-analysis of 67 trials comparing CBT and antidepressants found no significant difference in acute efficacy (Hedges' g = -0.02), but CBT showed lower relapse rates at long-term follow-up.", methodologyType: "meta-analysis", sampleSize: 5993, pValue: "0.78", evidenceQuality: "A", replicationStatus: "confirmed" },
+    ],
+    claims: [
+      { paperIdx: 0, claimText: "All commonly prescribed antidepressants are more effective than placebo for adults with major depressive disorder", direction: "protective", effectSize: 1.66, effectSizeUnit: "OR for response", ciLower: 1.51, ciUpper: 1.83, population: "Adults with major depressive disorder", conditions: "Effect varies by drug; agomelatine, escitalopram and venlafaxine rank highest", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 8, supporting: 5, contradicting: 1, consensus: "well-established", uncertainty: 22, synthesisText: "The most comprehensive network meta-analysis to date demonstrates that all 21 examined antidepressants outperform placebo on response rates. Effect sizes are modest (OR 1.37-2.13) but clinically meaningful, with substantial heterogeneity across drugs and acceptability profiles.", moderatingVariables: "Drug class, baseline severity, and trial duration moderate effect magnitude.", methodologicalConcerns: "Industry funding bias and selective publication may inflate effect sizes by 10-30%.", temporalTrend: "Effect sizes have decreased over time as placebo response rates have risen." },
+      { paperIdx: 1, claimText: "Antidepressant-placebo differences are clinically negligible for mild-to-moderate depression", direction: "neutral", effectSize: 1.80, effectSizeUnit: "HAM-D points", ciLower: 1.40, ciUpper: 2.30, population: "Adults with mild-to-moderate depression", conditions: "Clinical significance threshold typically set at 3 HAM-D points", methodologyType: "meta-analysis", evidenceQuality: "B", replicationStatus: "partial", nReplications: 4, supporting: 3, contradicting: 3, consensus: "contested", uncertainty: 58, synthesisText: "There is ongoing debate about the clinical significance of antidepressant effects in milder depression. While statistical superiority over placebo exists, the magnitude often falls below conventional clinical-significance thresholds. Critics and defenders disagree about appropriate thresholds and about whether averaged effects mask responder subgroups.", moderatingVariables: "Baseline severity is the strongest moderator; benefits scale with severity.", methodologicalConcerns: "HAM-D ceiling and floor effects, choice of clinical significance threshold, and unblinding due to side effects all complicate interpretation.", temporalTrend: "Re-analyses with different severity stratifications have arrived at different conclusions." },
+      { paperIdx: 2, claimText: "More than half of long-term antidepressant users experience discontinuation symptoms when stopping", direction: "harmful", effectSize: 0.56, effectSizeUnit: "proportion experiencing withdrawal", ciLower: 0.45, ciUpper: 0.66, population: "Long-term SSRI/SNRI users", conditions: "46% of those affected describe symptoms as severe", methodologyType: "review", evidenceQuality: "C", replicationStatus: "unverified", nReplications: 2, supporting: 2, contradicting: 2, consensus: "contested", uncertainty: 68, synthesisText: "Discontinuation symptoms are common in long-term antidepressant users, but estimates of prevalence and severity vary widely. Methodological quality of underlying studies is mixed, with reliance on patient surveys and selected populations. Distinguishing withdrawal from depression relapse is difficult.", moderatingVariables: "Risk increases with duration of treatment, dose, and shorter-half-life drugs (paroxetine, venlafaxine).", methodologicalConcerns: "Many included studies are surveys of self-selected users; ascertainment and reporting bias likely.", temporalTrend: "Recognition of withdrawal symptoms has increased; estimates have grown over time." },
+      { paperIdx: 3, claimText: "Sequential antidepressant trials achieve remission in approximately two-thirds of treatment-resistant patients", direction: "protective", effectSize: 0.67, effectSizeUnit: "cumulative remission rate", ciLower: 0.63, ciUpper: 0.71, population: "Outpatients with non-psychotic MDD", conditions: "Up to 4 sequential treatment steps", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 5, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 28, synthesisText: "STAR*D and replication studies show that sequential treatment strategies achieve remission in roughly two-thirds of patients with non-psychotic depression, but with diminishing returns at each step and substantial relapse rates. Real-world remission rates are lower than trial-protocol estimates.", moderatingVariables: "Comorbid anxiety, substance use, and chronicity reduce remission rates substantially.", methodologicalConcerns: "STAR*D used non-blinded equipoise design; original analyses overestimated remission via post-hoc reclassification.", temporalTrend: "Re-analyses with stricter outcome definitions yield lower remission estimates." },
+      { paperIdx: 4, claimText: "SSRIs increase risk of suicidal ideation in children and adolescents", direction: "harmful", effectSize: 1.95, effectSizeUnit: "RR for suicidal ideation/behavior", ciLower: 1.28, ciUpper: 2.98, population: "Pediatric patients (under 18)", conditions: "Risk highest in first weeks of treatment; risk benefit may favor treatment in moderate-severe MDD", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 5, supporting: 5, contradicting: 0, consensus: "well-established", uncertainty: 25, synthesisText: "FDA pooled analyses of randomized trials confirm an approximately 2-fold increase in suicidal ideation and behavior among children and adolescents on antidepressants vs placebo, leading to the FDA black-box warning. Completed suicides are rare in trials, so warnings concern ideation and attempts. Risk-benefit balance remains favorable in moderate-severe pediatric depression.", moderatingVariables: "Risk highest in first 4 weeks; appears to attenuate with sustained treatment.", methodologicalConcerns: "Trials underpowered for completed suicide; outcome definitions vary.", temporalTrend: "Black-box warning issuance was followed by reduced antidepressant prescribing and a paradoxical rise in adolescent suicide rates in some analyses." },
+      { paperIdx: 5, claimText: "Cognitive behavioral therapy is comparably effective to antidepressants for acute treatment of major depression", direction: "neutral", effectSize: -0.02, effectSizeUnit: "Hedges' g (CBT vs ADs)", ciLower: -0.10, ciUpper: 0.06, population: "Adults with major depressive disorder", conditions: "Combined treatment outperforms either alone; CBT shows lower relapse", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 4, contradicting: 0, consensus: "well-established", uncertainty: 20, synthesisText: "Comparative meta-analyses consistently show no meaningful difference between CBT and antidepressants for acute treatment of major depression. CBT shows advantages in long-term relapse prevention. Combined treatment outperforms either alone for severe depression. Patient preference and access should drive choice.", moderatingVariables: "Severity, chronicity, and comorbidities modify the relative balance.", methodologicalConcerns: "Allegiance effects in trials; difficulty blinding to psychotherapy condition.", temporalTrend: "Comparable acute efficacy has been replicated across trial generations." },
+      { paperIdx: 0, claimText: "Escitalopram and sertraline have the most favorable balance of efficacy and acceptability among SSRIs", direction: "protective", effectSize: 1.85, effectSizeUnit: "OR for response (escitalopram)", ciLower: 1.62, ciUpper: 2.13, population: "Adults with major depressive disorder", conditions: "Among 21 antidepressants ranked by SUCRA score", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 4, contradicting: 0, consensus: "well-established", uncertainty: 26, synthesisText: "Network meta-analysis ranks escitalopram and sertraline highest on combined response and tolerability among SSRIs. These rankings inform first-line treatment guidelines. Differences between top-ranked agents are small, and individual variation in response is large.", moderatingVariables: "Patient-specific tolerability and prior treatment response should guide individual choice.", methodologicalConcerns: "Indirect comparisons amplify uncertainty; tolerability outcomes are heterogeneous.", temporalTrend: "Rankings have remained stable across updated network meta-analyses." },
+    ],
+  },
+  // ========== TOPIC 4: Aspirin & Cardiovascular Prevention ==========
+  {
+    topic: {
+      name: "Aspirin for Cardiovascular Disease Prevention",
+      slug: "aspirin-cv-prevention",
+      description: "Low-dose aspirin for primary and secondary prevention of cardiovascular events, including bleeding risk trade-offs across age and risk strata.",
+      domain: "Cardiology",
+    },
+    papers: [
+      { title: "Effect of Aspirin on Cardiovascular Events and Bleeding in the Healthy Elderly (ASPREE)", authors: "McNeil JJ, Wolfe R, Woods RL, et al.", journal: "New England Journal of Medicine", publicationYear: 2018, doi: "10.1056/NEJMoa1805819", pmid: "30221597", abstract: "RCT of 19,114 healthy adults aged 70+. Aspirin 100mg/day did not reduce cardiovascular events (HR 0.95) but increased major hemorrhage (HR 1.38).", methodologyType: "rct", sampleSize: 19114, pValue: "0.79", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Aspirin in primary and secondary prevention of vascular disease: collaborative meta-analysis", authors: "Antithrombotic Trialists' Collaboration", journal: "The Lancet", publicationYear: 2009, doi: "10.1016/S0140-6736(09)60503-1", pmid: "19482214", abstract: "Meta-analysis of 6 primary-prevention trials (95,000 individuals) and 16 secondary-prevention trials. Aspirin reduced serious vascular events by 12% in primary prevention but increased major bleeds by 54%.", methodologyType: "meta-analysis", sampleSize: 112000, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Aspirin for primary prevention of cardiovascular events in diabetes (ASCEND)", authors: "Bowman L, Mafham M, Wallendszus K, et al.", journal: "New England Journal of Medicine", publicationYear: 2018, doi: "10.1056/NEJMoa1804988", pmid: "30146931", abstract: "RCT of 15,480 diabetic patients without prior CVD. Aspirin reduced serious vascular events by 12% but caused similar increase in major bleeds.", methodologyType: "rct", sampleSize: 15480, pValue: "0.01", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Aspirin for primary prevention in moderate-risk patients (ARRIVE)", authors: "Gaziano JM, Brotons C, Coppolecchia R, et al.", journal: "The Lancet", publicationYear: 2018, doi: "10.1016/S0140-6736(18)31924-X", pmid: "30221595", abstract: "RCT of 12,546 moderate-risk patients. Aspirin 100mg/day did not reduce CV events (HR 0.96) and approximately doubled gastrointestinal bleeding.", methodologyType: "rct", sampleSize: 12546, pValue: "0.60", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Aspirin for secondary prevention after myocardial infarction: long-term outcomes", authors: "Baigent C, Sudlow C, Collins R, Peto R.", journal: "BMJ", publicationYear: 2002, doi: "10.1136/bmj.324.7329.71", pmid: "11786451", abstract: "Meta-analysis of secondary prevention trials. Aspirin reduces serious vascular events by 25% in patients with prior MI, stroke, or peripheral vascular disease (RR 0.75, 95% CI 0.71-0.79).", methodologyType: "meta-analysis", sampleSize: 135640, pValue: "<0.001", evidenceQuality: "A", replicationStatus: "confirmed" },
+    ],
+    claims: [
+      { paperIdx: 0, claimText: "Daily low-dose aspirin does not reduce cardiovascular events in healthy older adults", direction: "neutral", effectSize: 0.95, effectSizeUnit: "HR for CV events", ciLower: 0.83, ciUpper: 1.08, population: "Healthy adults aged 70+", conditions: "100 mg enteric-coated daily; no prior CVD", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 22, synthesisText: "Three large contemporary trials in primary-prevention populations (ASPREE, ARRIVE, ASCEND) consistently show no meaningful reduction in cardiovascular events with low-dose aspirin in healthy adults. Combined with bleeding harms, the risk-benefit balance no longer favors universal use in primary prevention.", moderatingVariables: "Age, baseline CV risk, and bleeding risk modify the balance.", methodologicalConcerns: "Background statin and antihypertensive use is much higher in recent trials than in historical primary-prevention studies.", temporalTrend: "Evidence has shifted strongly against primary prevention since 2018." },
+      { paperIdx: 1, claimText: "Daily aspirin substantially increases risk of major bleeding events", direction: "harmful", effectSize: 1.54, effectSizeUnit: "RR for major bleeds", ciLower: 1.30, ciUpper: 1.82, population: "Adults on long-term aspirin therapy", conditions: "Risk increases with age; concomitant NSAIDs further elevate risk", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 9, supporting: 5, contradicting: 0, consensus: "well-established", uncertainty: 18, synthesisText: "Across both primary and secondary prevention populations, daily aspirin increases major bleeding events by approximately 50%. Risk is concentrated in gastrointestinal bleeding and intracranial hemorrhage. Bleeding harms are concentrated in older adults and those on concurrent anticoagulants or NSAIDs.", moderatingVariables: "Age, prior bleeding, H. pylori status, and concomitant medications.", methodologicalConcerns: "Bleeding outcome definitions vary across trials.", temporalTrend: "Bleeding risk estimates have increased as ascertainment has improved." },
+      { paperIdx: 2, claimText: "Aspirin's protective effect on cardiovascular events in diabetics is offset by bleeding risk", direction: "neutral", effectSize: 0.88, effectSizeUnit: "HR for vascular events", ciLower: 0.79, ciUpper: 0.97, population: "Adults with diabetes without prior CVD", conditions: "Net clinical benefit close to zero", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 1, consensus: "well-established", uncertainty: 32, synthesisText: "ASCEND demonstrates that aspirin reduces serious vascular events in diabetes by 12% but causes a similar absolute increase in major bleeding. Net clinical benefit is close to zero, and current guidelines no longer recommend routine aspirin for primary prevention in diabetes.", moderatingVariables: "Diabetes duration, glycemic control, and concurrent statin use.", methodologicalConcerns: "Trial population was generally low-risk; effect in higher-risk diabetics may differ.", temporalTrend: "Guideline recommendations have shifted from routine to selective use." },
+      { paperIdx: 3, claimText: "Aspirin provides no benefit for cardiovascular prevention in moderate-risk adults", direction: "neutral", effectSize: 0.96, effectSizeUnit: "HR for CV events", ciLower: 0.81, ciUpper: 1.13, population: "Moderate-risk adults without diabetes", conditions: "10-year CV risk 10-20%; on background contemporary preventive therapy", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 3, supporting: 3, contradicting: 0, consensus: "well-established", uncertainty: 28, synthesisText: "The ARRIVE trial in moderate-risk adults found no cardiovascular benefit and a doubling of GI bleeding with low-dose aspirin. The result is consistent with the broader picture in contemporary primary prevention populations on modern background therapy.", moderatingVariables: "Background statin and antihypertensive use moderates the result.", methodologicalConcerns: "Lower-than-expected event rate in trial limited statistical power.", temporalTrend: "Consistent with other contemporary trials." },
+      { paperIdx: 4, claimText: "Aspirin substantially reduces recurrent cardiovascular events in patients with prior CVD", direction: "protective", effectSize: 0.75, effectSizeUnit: "RR for serious vascular events", ciLower: 0.71, ciUpper: 0.79, population: "Adults with prior MI, stroke, or PVD", conditions: "Net clinical benefit clearly favors aspirin in established CVD", methodologyType: "meta-analysis", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 8, supporting: 5, contradicting: 0, consensus: "well-established", uncertainty: 14, synthesisText: "In secondary prevention, aspirin reduces serious vascular events by approximately 25%, yielding clear net benefit despite bleeding risk. This is a foundation of post-MI and post-stroke care, supported by decades of trial evidence in over 130,000 patients.", moderatingVariables: "Time since index event; absolute benefit greatest in highest-risk patients.", methodologicalConcerns: "Older trials used higher doses than current standard 75-100 mg.", temporalTrend: "Effect estimates have remained stable across decades." },
+      { paperIdx: 1, claimText: "Aspirin reduces colorectal cancer incidence with long-term use", direction: "protective", effectSize: 0.76, effectSizeUnit: "RR for colorectal cancer (10+ years use)", ciLower: 0.60, ciUpper: 0.96, population: "Adults with at least 10 years of aspirin use", conditions: "Effect emerges only after extended use; not seen at less than 5 years", methodologyType: "meta-analysis", evidenceQuality: "B", replicationStatus: "partial", nReplications: 3, supporting: 3, contradicting: 1, consensus: "contested", uncertainty: 50, synthesisText: "Long-term aspirin use is associated with reduced colorectal cancer incidence and mortality, but only after 5-10 years of use. Effect on overall cancer incidence is less clear. Recent ASPREE secondary analyses have found no protective effect and possible increase in cancer-related mortality, complicating the picture.", moderatingVariables: "Duration of use is critical; effect not seen in short-term users.", methodologicalConcerns: "Long-term observational confounding; ASPREE trial result conflicts with prior meta-analyses.", temporalTrend: "Recent trials have raised questions about the protective effect previously seen in observational data." },
+    ],
+  },
+  // ========== TOPIC 5: Exercise and Cognitive Decline ==========
+  {
+    topic: {
+      name: "Physical Exercise and Cognitive Decline in Aging",
+      slug: "exercise-cognitive-decline",
+      description: "Effects of regular physical exercise on cognitive function, dementia risk, and brain structure in older adults, including aerobic, resistance, and combined modalities.",
+      domain: "Neurology",
+    },
+    papers: [
+      { title: "Physical activity and incident cognitive impairment in elderly persons: the INVADE study", authors: "Etgen T, Sander D, Huntgeburth U, et al.", journal: "Archives of Internal Medicine", publicationYear: 2010, doi: "10.1001/archinternmed.2009.510", pmid: "20065198", abstract: "Cohort study of 3,485 older adults found that moderate to high physical activity was associated with reduced risk of cognitive impairment over 2-year follow-up (OR 0.59, 95% CI 0.43-0.80).", methodologyType: "cohort", sampleSize: 3485, pValue: "0.001", evidenceQuality: "B", replicationStatus: "confirmed" },
+      { title: "Aerobic exercise training increases brain volume in aging humans", authors: "Erickson KI, Voss MW, Prakash RS, et al.", journal: "PNAS", publicationYear: 2011, doi: "10.1073/pnas.1015950108", pmid: "21282661", abstract: "RCT of 120 older adults: 1 year of aerobic exercise increased hippocampal volume by 2%, effectively reversing age-related volume loss by 1-2 years.", methodologyType: "rct", sampleSize: 120, pValue: "0.001", evidenceQuality: "B", replicationStatus: "confirmed" },
+      { title: "Effect of long-term physical activity intervention on cognitive function (LIFE trial)", authors: "Sink KM, Espeland MA, Castro CM, et al.", journal: "JAMA", publicationYear: 2015, doi: "10.1001/jama.2015.9617", pmid: "26241599", abstract: "RCT of 1,635 sedentary older adults found no significant effect of structured physical activity on global cognitive function over 24 months (between-group difference 0.21 points on modified MMSE).", methodologyType: "rct", sampleSize: 1635, pValue: "0.45", evidenceQuality: "A", replicationStatus: "confirmed" },
+      { title: "Multidomain intervention to prevent cognitive decline (FINGER trial)", authors: "Ngandu T, Lehtisalo J, Solomon A, et al.", journal: "The Lancet", publicationYear: 2015, doi: "10.1016/S0140-6736(15)60461-5", pmid: "25771249", abstract: "RCT of 1,260 older adults at risk for dementia. Combined diet, exercise, cognitive training, and vascular monitoring improved global cognition by 25% over 2 years vs control.", methodologyType: "rct", sampleSize: 1260, pValue: "0.030", evidenceQuality: "A", replicationStatus: "partial" },
+      { title: "Physical activity and risk of Alzheimer's disease: meta-analysis of prospective studies", authors: "Hamer M, Chida Y.", journal: "Psychological Medicine", publicationYear: 2009, doi: "10.1017/S0033291708003681", pmid: "18570697", abstract: "Meta-analysis of 16 prospective studies (n=163,797) found that high levels of physical activity were associated with reduced risk of Alzheimer's disease (RR 0.55, 95% CI 0.36-0.84).", methodologyType: "meta-analysis", sampleSize: 163797, pValue: "0.005", evidenceQuality: "B", replicationStatus: "confirmed" },
+      { title: "Resistance training and cognitive function in older adults: meta-analysis", authors: "Liu-Ambrose T, Donaldson MG.", journal: "British Journal of Sports Medicine", publicationYear: 2019, doi: "10.1136/bjsports-2018-099608", pmid: "30414427", abstract: "Meta-analysis of 24 RCTs (n=1,931) found resistance training improved executive function (Hedges' g = 0.32) and processing speed in cognitively normal older adults.", methodologyType: "meta-analysis", sampleSize: 1931, pValue: "0.001", evidenceQuality: "B", replicationStatus: "confirmed" },
+    ],
+    claims: [
+      { paperIdx: 0, claimText: "Higher physical activity in midlife and late life is associated with reduced risk of cognitive impairment", direction: "protective", effectSize: 0.59, effectSizeUnit: "OR for cognitive impairment", ciLower: 0.43, ciUpper: 0.80, population: "Adults aged 55+", conditions: "Effect strongest with moderate-to-high activity vs sedentary", methodologyType: "cohort", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 6, supporting: 5, contradicting: 1, consensus: "well-established", uncertainty: 30, synthesisText: "Multiple cohort studies converge on a protective association between higher physical activity and reduced cognitive impairment in older adults. Effect sizes are moderate but consistent across diverse populations and follow-up durations.", moderatingVariables: "Sex, baseline cognition, and APOE4 status modify the effect magnitude.", methodologicalConcerns: "Self-reported activity is unreliable; reverse causation possible (early cognitive decline reduces activity).", temporalTrend: "Effect estimates have remained stable across decades of observational research." },
+      { paperIdx: 1, claimText: "Aerobic exercise training increases hippocampal volume in older adults", direction: "protective", effectSize: 0.02, effectSizeUnit: "fractional volume increase", ciLower: 0.01, ciUpper: 0.03, population: "Sedentary older adults", conditions: "1 year of moderate-intensity aerobic training", methodologyType: "rct", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 1, consensus: "contested", uncertainty: 48, synthesisText: "Several RCTs find that sustained aerobic exercise increases hippocampal volume in older adults by 1-2%, effectively reversing 1-2 years of age-related atrophy. However, other studies have found no effect on hippocampal volume despite improved cognition. The neural basis of exercise-related cognitive benefits remains debated.", moderatingVariables: "Baseline fitness and adherence to exercise prescription.", methodologicalConcerns: "MRI volume measurement noise relative to effect size; small samples.", temporalTrend: "Replication has been mixed; effect may depend on intervention specifics." },
+      { paperIdx: 2, claimText: "Structured physical activity programs alone do not improve global cognition in sedentary older adults", direction: "neutral", effectSize: 0.21, effectSizeUnit: "modified MMSE points", ciLower: -0.34, ciUpper: 0.76, population: "Sedentary older adults at risk of disability", conditions: "Single-domain intervention; effect emerges with multidomain programs", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 2, consensus: "contested", uncertainty: 56, synthesisText: "The largest single-domain exercise trial (LIFE) found no benefit on global cognition over 24 months despite improvements in physical function. Effects may emerge only with longer follow-up, with cognitively oriented exercise, or with multidomain interventions combining diet and cognitive training.", moderatingVariables: "Baseline cognition and intervention intensity. Larger benefit in cognitively impaired subgroups.", methodologicalConcerns: "Global cognition measures may be insensitive to domain-specific changes; control group also increased activity.", temporalTrend: "Longer-term follow-up of LIFE participants may reveal delayed effects." },
+      { paperIdx: 3, claimText: "Multidomain lifestyle interventions improve global cognition in at-risk older adults", direction: "protective", effectSize: 0.25, effectSizeUnit: "standardized cognitive composite (proportion improvement)", ciLower: 0.02, ciUpper: 0.48, population: "Older adults at elevated dementia risk", conditions: "Combined diet, exercise, cognitive training, and vascular risk monitoring", methodologyType: "rct", evidenceQuality: "A", replicationStatus: "partial", nReplications: 3, supporting: 3, contradicting: 1, consensus: "contested", uncertainty: 50, synthesisText: "FINGER demonstrated that combined lifestyle intervention improves global cognition in at-risk older adults. Replication trials (MAPT, PreDIVA, US POINTER) have shown mixed results, with some failing to find significant benefit. Multidomain approaches likely outperform single-domain interventions but optimal components remain unclear.", moderatingVariables: "Baseline risk profile, adherence to multidomain components.", methodologicalConcerns: "Complex interventions hard to standardize across replication trials.", temporalTrend: "Ongoing US POINTER trial will provide further evidence." },
+      { paperIdx: 4, claimText: "Higher physical activity is associated with reduced risk of Alzheimer's disease", direction: "protective", effectSize: 0.55, effectSizeUnit: "RR for AD", ciLower: 0.36, ciUpper: 0.84, population: "Older adults", conditions: "Highest vs lowest activity tertile", methodologyType: "meta-analysis", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 5, supporting: 4, contradicting: 1, consensus: "well-established", uncertainty: 32, synthesisText: "Meta-analytic evidence from 16 prospective studies of over 160,000 adults supports a 45% reduction in Alzheimer's disease incidence among the most physically active. The relationship is graded with intensity. Causality is supported by biological plausibility but not directly demonstrated in trials.", moderatingVariables: "Effect strongest for moderate-vigorous activity; type of activity matters less.", methodologicalConcerns: "Reverse causation cannot be excluded; long lag between exposure and outcome complicates causal interpretation.", temporalTrend: "Estimates have remained stable as cohorts mature." },
+      { paperIdx: 5, claimText: "Resistance training improves executive function in cognitively normal older adults", direction: "protective", effectSize: 0.32, effectSizeUnit: "Hedges' g", ciLower: 0.16, ciUpper: 0.48, population: "Cognitively normal older adults", conditions: "Programs of 6+ months with progressive load", methodologyType: "meta-analysis", evidenceQuality: "B", replicationStatus: "confirmed", nReplications: 4, supporting: 3, contradicting: 1, consensus: "well-established", uncertainty: 30, synthesisText: "Resistance training shows moderate, consistent benefits for executive function in older adults across 24 RCTs. Effect sizes are smaller than those reported for aerobic exercise but reach statistical significance. Combined aerobic and resistance training appears more effective than either modality alone.", moderatingVariables: "Program duration and progression schedule modify effect magnitude.", methodologicalConcerns: "Active control conditions are heterogeneous across trials.", temporalTrend: "Effect sizes have been stable across recent meta-analyses." },
+      { paperIdx: 0, claimText: "Sedentary behavior is independently associated with cognitive decline beyond lack of exercise", direction: "harmful", effectSize: 1.30, effectSizeUnit: "OR for cognitive decline (high vs low sedentary time)", ciLower: 1.10, ciUpper: 1.54, population: "Older adults", conditions: "Independent of moderate-vigorous activity time", methodologyType: "cohort", evidenceQuality: "C", replicationStatus: "unverified", nReplications: 2, supporting: 2, contradicting: 1, consensus: "preliminary", uncertainty: 65, synthesisText: "Emerging evidence suggests that sedentary time is independently associated with cognitive decline in older adults, even after accounting for moderate-vigorous activity. The mechanism may involve reduced cerebral blood flow during prolonged sitting. Evidence is preliminary and based largely on cross-sectional and short-term cohort data.", moderatingVariables: "Patterns of sedentary time (continuous vs broken-up) may matter.", methodologicalConcerns: "Sedentary time is hard to measure accurately; reverse causation likely.", temporalTrend: "Increasing research focus on sedentary behavior as distinct from inactivity." },
+    ],
+  },
+];
 
 async function seed() {
   console.log("Clearing existing data...");
@@ -9,466 +157,99 @@ async function seed() {
   await db.delete(papersTable);
   await db.delete(topicsTable);
 
-  console.log("Inserting topics...");
-  const topics = await db.insert(topicsTable).values([
-    {
-      name: "Caffeine and Cardiovascular Health",
-      slug: "caffeine-cardiovascular",
-      description: "Effects of habitual caffeine consumption on heart disease, blood pressure, and cardiovascular mortality.",
-      domain: "Cardiology",
-    },
-    {
-      name: "SSRI Antidepressants Efficacy",
-      slug: "ssri-efficacy",
-      description: "Effectiveness of selective serotonin reuptake inhibitors for major depressive disorder across populations.",
-      domain: "Psychiatry",
-    },
-    {
-      name: "Statins for Primary Prevention",
-      slug: "statins-primary-prevention",
-      description: "Use of statin therapy in patients without prior cardiovascular events for risk reduction.",
-      domain: "Cardiology",
-    },
-    {
-      name: "Vitamin D Supplementation",
-      slug: "vitamin-d-supplementation",
-      description: "Health outcomes associated with vitamin D supplementation in adults, including bone, immune, and cardiovascular effects.",
-      domain: "Nutrition",
-    },
-    {
-      name: "Aspirin for Cardiovascular Prevention",
-      slug: "aspirin-cv-prevention",
-      description: "Low-dose aspirin for primary and secondary prevention of cardiovascular events, with attention to bleeding risk.",
-      domain: "Cardiology",
-    },
-  ]).returning();
+  let totalClaims = 0;
+  for (const t of TOPICS) {
+    console.log(`Inserting topic: ${t.topic.name}`);
+    const [topic] = await db.insert(topicsTable).values(t.topic).returning();
 
-  const [coffeeT, ssriT, statinT, vitDT, aspirinT] = topics;
-
-  console.log("Inserting papers...");
-  const papers = await db.insert(papersTable).values([
-    // Caffeine
-    {
-      topicId: coffeeT.id,
-      title: "Coffee consumption and risk of type 2 diabetes: a systematic review and dose-response meta-analysis",
-      authors: "Ding M, Bhupathiraju SN, Chen M, et al.",
-      journal: "Diabetes Care",
-      publicationYear: 2014,
-      doi: "10.2337/dc13-1539",
-      pmid: "24459154",
-      abstract: "Pooled analysis of 28 prospective studies (1,109,272 participants) found a non-linear inverse association between coffee consumption and diabetes risk. Each additional cup per day was associated with a 9% lower risk of type 2 diabetes (RR 0.91, 95% CI 0.89-0.94).",
-      methodologyType: "meta-analysis",
-      sampleSize: 1109272,
-      pValue: "<0.001",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      openAccessUrl: "https://care.diabetesjournals.org/content/37/2/569",
-    },
-    {
-      topicId: coffeeT.id,
-      title: "Long-term coffee consumption and risk of cardiovascular disease: a systematic review and dose-response meta-analysis",
-      authors: "Ding M, Bhupathiraju SN, Satija A, et al.",
-      journal: "Circulation",
-      publicationYear: 2014,
-      doi: "10.1161/CIRCULATIONAHA.113.005925",
-      pmid: "24201300",
-      abstract: "Meta-analysis of 36 studies with 1,279,804 participants found a U-shaped association: moderate coffee consumption (3-5 cups/day) associated with lowest CVD risk (RR 0.85, 95% CI 0.80-0.90).",
-      methodologyType: "meta-analysis",
-      sampleSize: 1279804,
-      pValue: "<0.001",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    // SSRI
-    {
-      topicId: ssriT.id,
-      title: "Comparative efficacy and acceptability of 21 antidepressant drugs for the acute treatment of adults with major depressive disorder",
-      authors: "Cipriani A, Furukawa TA, Salanti G, et al.",
-      journal: "The Lancet",
-      publicationYear: 2018,
-      doi: "10.1016/S0140-6736(17)32802-7",
-      pmid: "29477251",
-      abstract: "Network meta-analysis of 522 trials (116,477 participants) comparing 21 antidepressants. All antidepressants were more effective than placebo, with ORs ranging from 1.37 to 2.13 for response.",
-      methodologyType: "meta-analysis",
-      sampleSize: 116477,
-      pValue: "<0.001",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    {
-      topicId: ssriT.id,
-      title: "Initial severity and antidepressant benefits: a meta-analysis of data submitted to the FDA",
-      authors: "Kirsch I, Deacon BJ, Huedo-Medina TB, et al.",
-      journal: "PLoS Medicine",
-      publicationYear: 2008,
-      doi: "10.1371/journal.pmed.0050045",
-      pmid: "18303940",
-      abstract: "FDA-submitted trials show that antidepressant-placebo differences increase with baseline severity but are clinically negligible for mild-to-moderate depression. Mean drug-placebo difference of 1.80 on HAM-D.",
-      methodologyType: "meta-analysis",
-      sampleSize: 5133,
-      pValue: "<0.001",
-      evidenceQuality: "B",
-      replicationStatus: "partial",
-    },
-    // Statins
-    {
-      topicId: statinT.id,
-      title: "Efficacy and safety of statin therapy in older people: a meta-analysis of individual participant data from 28 randomised controlled trials",
-      authors: "Cholesterol Treatment Trialists' Collaboration",
-      journal: "The Lancet",
-      publicationYear: 2019,
-      doi: "10.1016/S0140-6736(18)31942-1",
-      pmid: "30712900",
-      abstract: "Meta-analysis of 186,854 participants across 28 trials. Statin therapy reduced major vascular events by 21% per mmol/L LDL reduction (RR 0.79, 95% CI 0.77-0.81), with consistent benefit across age groups.",
-      methodologyType: "meta-analysis",
-      sampleSize: 186854,
-      pValue: "<0.001",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    // Vitamin D
-    {
-      topicId: vitDT.id,
-      title: "Vitamin D Supplements and Prevention of Cancer and Cardiovascular Disease (VITAL trial)",
-      authors: "Manson JE, Cook NR, Lee IM, et al.",
-      journal: "New England Journal of Medicine",
-      publicationYear: 2019,
-      doi: "10.1056/NEJMoa1809944",
-      pmid: "30415629",
-      abstract: "Randomized trial of 25,871 adults receiving 2000 IU/day vitamin D3 vs placebo over median 5.3 years. No significant reduction in invasive cancer (HR 0.96) or major cardiovascular events (HR 0.97).",
-      methodologyType: "rct",
-      sampleSize: 25871,
-      pValue: "0.47",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    {
-      topicId: vitDT.id,
-      title: "Effects of vitamin D supplementation on musculoskeletal health: a systematic review",
-      authors: "Bolland MJ, Grey A, Avenell A.",
-      journal: "The Lancet Diabetes & Endocrinology",
-      publicationYear: 2018,
-      doi: "10.1016/S2213-8587(18)30265-1",
-      pmid: "30293909",
-      abstract: "Meta-analysis of 81 RCTs (53,537 participants) showed vitamin D supplementation does not prevent fractures or falls or have meaningful effects on bone density.",
-      methodologyType: "meta-analysis",
-      sampleSize: 53537,
-      pValue: "0.81",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    // Aspirin
-    {
-      topicId: aspirinT.id,
-      title: "Effect of Aspirin on Cardiovascular Events and Bleeding in the Healthy Elderly (ASPREE)",
-      authors: "McNeil JJ, Wolfe R, Woods RL, et al.",
-      journal: "New England Journal of Medicine",
-      publicationYear: 2018,
-      doi: "10.1056/NEJMoa1805819",
-      pmid: "30221597",
-      abstract: "RCT of 19,114 healthy adults aged 70+ over median 4.7 years. Aspirin 100mg/day did not significantly reduce cardiovascular events (HR 0.95) but increased major hemorrhage (HR 1.38).",
-      methodologyType: "rct",
-      sampleSize: 19114,
-      pValue: "0.79",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-    {
-      topicId: aspirinT.id,
-      title: "Aspirin in the primary and secondary prevention of vascular disease: collaborative meta-analysis",
-      authors: "Antithrombotic Trialists' Collaboration",
-      journal: "The Lancet",
-      publicationYear: 2009,
-      doi: "10.1016/S0140-6736(09)60503-1",
-      pmid: "19482214",
-      abstract: "Meta-analysis of 6 primary-prevention trials (95,000 individuals) and 16 secondary-prevention trials (17,000 individuals). Aspirin reduced serious vascular events by 12% in primary prevention but increased major bleeds by 54%.",
-      methodologyType: "meta-analysis",
-      sampleSize: 112000,
-      pValue: "<0.001",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-    },
-  ]).returning();
-
-  const [
-    coffeeP1, coffeeP2,
-    ssriP1, ssriP2,
-    statinP1,
-    vitDP1, vitDP2,
-    aspirinP1, aspirinP2,
-  ] = papers;
-
-  console.log("Inserting claims...");
-  const claims = await db.insert(claimsTable).values([
-    // Coffee/diabetes
-    {
-      topicId: coffeeT.id,
-      paperId: coffeeP1.id,
-      claimText: "Habitual coffee consumption is associated with a reduced risk of type 2 diabetes in adults",
-      direction: "protective",
-      effectSize: 0.91,
-      effectSizeUnit: "RR per cup/day",
-      ciLower: 0.89,
-      ciUpper: 0.94,
-      population: "Adults (general population)",
-      conditions: "Both caffeinated and decaffeinated coffee show similar effects",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 7,
-    },
-    {
-      topicId: coffeeT.id,
-      paperId: coffeeP2.id,
-      claimText: "Moderate coffee consumption (3-5 cups/day) is associated with the lowest cardiovascular disease risk",
-      direction: "protective",
-      effectSize: 0.85,
-      effectSizeUnit: "RR vs no consumption",
-      ciLower: 0.80,
-      ciUpper: 0.90,
-      population: "Adults without prior CVD",
-      conditions: "U-shaped dose-response curve; higher consumption attenuates benefit",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 5,
-    },
-    {
-      topicId: coffeeT.id,
-      paperId: coffeeP2.id,
-      claimText: "Heavy coffee consumption (>6 cups/day) acutely increases blood pressure in caffeine-naive individuals",
-      direction: "harmful",
-      effectSize: 8.1,
-      effectSizeUnit: "mmHg systolic",
-      ciLower: 5.7,
-      ciUpper: 10.6,
-      population: "Caffeine-naive adults",
-      conditions: "Effect attenuates with chronic exposure due to tolerance",
-      methodologyType: "rct",
-      evidenceQuality: "B",
-      replicationStatus: "confirmed",
-      nReplications: 4,
-    },
-    // SSRI
-    {
-      topicId: ssriT.id,
-      paperId: ssriP1.id,
-      claimText: "All commonly prescribed antidepressants are more effective than placebo for adults with major depressive disorder",
-      direction: "protective",
-      effectSize: 1.66,
-      effectSizeUnit: "OR for response",
-      ciLower: 1.51,
-      ciUpper: 1.83,
-      population: "Adults with major depressive disorder",
-      conditions: "Effect varies substantially by drug; agomelatine, escitalopram and venlafaxine rank highest",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 8,
-    },
-    {
-      topicId: ssriT.id,
-      paperId: ssriP2.id,
-      claimText: "Antidepressant-placebo differences are clinically negligible for mild-to-moderate depression",
-      direction: "neutral",
-      effectSize: 1.80,
-      effectSizeUnit: "HAM-D points",
-      ciLower: 1.40,
-      ciUpper: 2.30,
-      population: "Adults with mild-to-moderate depression",
-      conditions: "Clinical significance threshold typically set at 3 HAM-D points",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "B",
-      replicationStatus: "partial",
-      nReplications: 3,
-    },
-    // Statins
-    {
-      topicId: statinT.id,
-      paperId: statinP1.id,
-      claimText: "Statin therapy reduces major vascular events in primary prevention populations",
-      direction: "protective",
-      effectSize: 0.79,
-      effectSizeUnit: "RR per 1 mmol/L LDL reduction",
-      ciLower: 0.77,
-      ciUpper: 0.81,
-      population: "Adults without prior cardiovascular events",
-      conditions: "Benefit consistent across age groups including those over 75",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 12,
-    },
-    // Vitamin D
-    {
-      topicId: vitDT.id,
-      paperId: vitDP1.id,
-      claimText: "Vitamin D supplementation does not reduce risk of major cardiovascular events in healthy adults",
-      direction: "neutral",
-      effectSize: 0.97,
-      effectSizeUnit: "HR for major CV events",
-      ciLower: 0.85,
-      ciUpper: 1.12,
-      population: "Healthy adults aged 50+",
-      conditions: "2000 IU/day supplementation; population was not vitamin D deficient at baseline",
-      methodologyType: "rct",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 4,
-    },
-    {
-      topicId: vitDT.id,
-      paperId: vitDP2.id,
-      claimText: "Vitamin D supplementation does not prevent fractures or falls in community-dwelling adults",
-      direction: "neutral",
-      effectSize: 1.00,
-      effectSizeUnit: "RR for fractures",
-      ciLower: 0.93,
-      ciUpper: 1.07,
-      population: "Community-dwelling adults",
-      conditions: "Excludes severely deficient populations and institutional care",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 6,
-    },
-    // Aspirin
-    {
-      topicId: aspirinT.id,
-      paperId: aspirinP1.id,
-      claimText: "Daily low-dose aspirin does not reduce cardiovascular events in healthy older adults",
-      direction: "neutral",
-      effectSize: 0.95,
-      effectSizeUnit: "HR for CV events",
-      ciLower: 0.83,
-      ciUpper: 1.08,
-      population: "Healthy adults aged 70+",
-      conditions: "100 mg enteric-coated daily; no prior CVD",
-      methodologyType: "rct",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 3,
-    },
-    {
-      topicId: aspirinT.id,
-      paperId: aspirinP2.id,
-      claimText: "Daily aspirin substantially increases risk of major bleeding events",
-      direction: "harmful",
-      effectSize: 1.54,
-      effectSizeUnit: "RR for major bleeds",
-      ciLower: 1.30,
-      ciUpper: 1.82,
-      population: "Adults on long-term aspirin therapy",
-      conditions: "Risk increases with age; concomitant NSAIDs further elevate risk",
-      methodologyType: "meta-analysis",
-      evidenceQuality: "A",
-      replicationStatus: "confirmed",
-      nReplications: 9,
-    },
-  ]).returning();
-
-  console.log(`Inserted ${claims.length} claims`);
-
-  console.log("Inserting studies & evidence links...");
-
-  // For each claim, create supporting and contradicting studies
-  for (const claim of claims) {
-    const isProtective = claim.direction === "protective";
-    const isNeutral = claim.direction === "neutral";
-
-    // 2-3 supporting studies
-    const supportingCount = 2 + Math.floor(Math.random() * 2);
-    const contradictingCount = isNeutral ? 1 : 1 + Math.floor(Math.random() * 2);
-
-    const supportingStudies = await db.insert(studiesTable).values(
-      Array.from({ length: supportingCount }, (_, i) => ({
-        paperId: claim.paperId,
-        topicId: claim.topicId,
-        title: `Confirmatory analysis of ${claim.claimText.slice(0, 60)}... (Study ${i + 1})`,
-        authors: ["Smith J, Chen L, et al.", "Williams R, Park S, et al.", "Anderson K, Lee H, et al."][i % 3],
-        publicationYear: 2015 + i * 2,
-        methodologyType: ["cohort", "rct", "observational"][i % 3],
-        sampleSize: 5000 + Math.floor(Math.random() * 50000),
-        effectSize: claim.effectSize ? claim.effectSize * (0.95 + Math.random() * 0.1) : null,
-        effectSizeUnit: claim.effectSizeUnit,
-        ciLower: claim.ciLower ? claim.ciLower * 0.97 : null,
-        ciUpper: claim.ciUpper ? claim.ciUpper * 1.03 : null,
-        pValue: ["<0.001", "0.002", "0.01"][i % 3],
-        evidenceQuality: ["A", "B", "B"][i % 3],
-        population: claim.population,
-        preregistered: i % 2,
-      }))
+    const insertedPapers = await db.insert(papersTable).values(
+      t.papers.map(p => ({ ...p, topicId: topic.id }))
     ).returning();
 
-    const contradictingStudies = await db.insert(studiesTable).values(
-      Array.from({ length: contradictingCount }, (_, i) => ({
-        paperId: claim.paperId,
-        topicId: claim.topicId,
-        title: `Subgroup analysis showing attenuated effect for ${claim.claimText.slice(0, 50)}...`,
-        authors: ["Petrov A, Yamada T, et al.", "O'Brien M, Singh R, et al."][i % 2],
-        publicationYear: 2017 + i * 2,
-        methodologyType: ["observational", "case-control"][i % 2],
-        sampleSize: 800 + Math.floor(Math.random() * 5000),
-        effectSize: claim.effectSize ? (isProtective ? claim.effectSize * 1.15 : claim.effectSize * 0.6) : null,
-        effectSizeUnit: claim.effectSizeUnit,
-        ciLower: null,
-        ciUpper: null,
-        pValue: ["0.18", "0.42"][i % 2],
-        evidenceQuality: ["B", "C"][i % 2],
-        population: claim.population + " (subgroup)",
-        preregistered: 0,
-      }))
-    ).returning();
+    for (const claimSpec of t.claims) {
+      const paper = insertedPapers[claimSpec.paperIdx];
+      const { paperIdx, supporting, contradicting, synthesisText, consensus, uncertainty, moderatingVariables, methodologicalConcerns, temporalTrend, ...claimData } = claimSpec;
 
-    // Evidence links
-    await db.insert(evidenceLinksTable).values([
-      ...supportingStudies.map(s => ({
+      const [claim] = await db.insert(claimsTable).values({
+        ...claimData,
+        topicId: topic.id,
+        paperId: paper.id,
+      }).returning();
+
+      // Supporting studies
+      const supportingStudies = supporting > 0 ? await db.insert(studiesTable).values(
+        Array.from({ length: supporting }, (_, i) => ({
+          paperId: paper.id,
+          topicId: topic.id,
+          title: `Replication study ${i + 1}: confirming ${claim.claimText.slice(0, 60)}...`,
+          authors: ["Smith J, Chen L, et al.", "Williams R, Park S, et al.", "Anderson K, Lee H, et al.", "Petrov A, Yamada T, et al.", "Müller H, García M, et al."][i % 5],
+          publicationYear: 2014 + (i * 2) % 10,
+          methodologyType: ["cohort", "rct", "observational", "case-control", "cross-sectional"][i % 5],
+          sampleSize: 2000 + Math.floor((i + 1) * 7500 + Math.random() * 5000),
+          effectSize: claim.effectSize ? claim.effectSize * (0.93 + (i * 0.04)) : null,
+          effectSizeUnit: claim.effectSizeUnit,
+          ciLower: claim.ciLower ? claim.ciLower * 0.95 : null,
+          ciUpper: claim.ciUpper ? claim.ciUpper * 1.05 : null,
+          pValue: ["<0.001", "0.002", "0.01", "0.04", "0.005"][i % 5],
+          evidenceQuality: ["A", "B", "B", "C", "A"][i % 5],
+          population: claim.population,
+          preregistered: i % 2,
+        }))
+      ).returning() : [];
+
+      const contradictingStudies = contradicting > 0 ? await db.insert(studiesTable).values(
+        Array.from({ length: contradicting }, (_, i) => ({
+          paperId: paper.id,
+          topicId: topic.id,
+          title: `Subgroup analysis with attenuated effect for: ${claim.claimText.slice(0, 50)}...`,
+          authors: ["O'Brien M, Singh R, et al.", "Tanaka H, Schmidt P, et al.", "Roberts J, Nakamura K, et al."][i % 3],
+          publicationYear: 2016 + i * 2,
+          methodologyType: ["observational", "case-control", "cross-sectional"][i % 3],
+          sampleSize: 600 + Math.floor(Math.random() * 4000),
+          effectSize: claim.effectSize ? (claim.direction === "protective" ? claim.effectSize * 1.18 : claim.effectSize * 0.65) : null,
+          effectSizeUnit: claim.effectSizeUnit,
+          ciLower: null,
+          ciUpper: null,
+          pValue: ["0.18", "0.34", "0.42"][i % 3],
+          evidenceQuality: ["B", "C", "C"][i % 3],
+          population: claim.population + " (subgroup)",
+          preregistered: 0,
+        }))
+      ).returning() : [];
+
+      await db.insert(evidenceLinksTable).values([
+        ...supportingStudies.map(s => ({
+          claimId: claim.id, studyId: s.id, direction: "supporting", contradictionExplanation: null as string | null,
+        })),
+        ...contradictingStudies.map((s, i) => ({
+          claimId: claim.id, studyId: s.id, direction: "contradicting",
+          contradictionExplanation: [
+            "Smaller sample limits power; effect was directionally consistent but not statistically significant.",
+            "Observational design with potential residual confounding; results sensitive to model specification.",
+            "Different population characteristics; generalizability to the broader claim is limited.",
+          ][i % 3],
+        })),
+      ]);
+
+      await db.insert(claimSynthesisTable).values({
         claimId: claim.id,
-        studyId: s.id,
-        direction: "supporting",
-        contradictionExplanation: null as string | null,
-      })),
-      ...contradictingStudies.map((s, i) => ({
-        claimId: claim.id,
-        studyId: s.id,
-        direction: "contradicting",
-        contradictionExplanation: [
-          "Smaller sample size in this subgroup limits statistical power; effect was directionally consistent but did not reach significance.",
-          "Observational design with potential for residual confounding; results sensitive to model specification.",
-        ][i % 2],
-      })),
-    ]);
+        topicId: topic.id,
+        consensusStatus: consensus,
+        synthesisText,
+        supportingCount: supportingStudies.length,
+        contradictingCount: contradictingStudies.length,
+        weightedEffectSize: claim.effectSize,
+        uncertaintyScore: uncertainty,
+        moderatingVariables,
+        methodologicalConcerns,
+        temporalTrend,
+      });
 
-    // Synthesis
-    const consensusStatus =
-      claim.evidenceQuality === "A" && claim.nReplications >= 5 ? "well-established" :
-      claim.evidenceQuality === "A" || claim.evidenceQuality === "B" ? "contested" :
-      "preliminary";
-
-    const synthesisText = isProtective
-      ? `Strong evidence supports a protective association. Across ${supportingStudies.length + contradictingStudies.length} studies, the effect is directionally consistent though magnitude varies. The pooled estimate of ${claim.effectSize?.toFixed(2)} ${claim.effectSizeUnit ?? ""} is robust to sensitivity analyses.`
-      : isNeutral
-      ? `Multiple high-quality trials show no clinically meaningful effect. The confidence interval crosses unity and the point estimate is close to no effect. Findings are consistent across populations and replicate well.`
-      : `Evidence indicates a harmful or adverse effect. The dose-response relationship is consistent and the magnitude is clinically significant. Heterogeneity exists across subgroups but the overall direction is clear.`;
-
-    await db.insert(claimSynthesisTable).values({
-      claimId: claim.id,
-      topicId: claim.topicId,
-      consensusStatus,
-      synthesisText,
-      supportingCount: supportingStudies.length,
-      contradictingCount: contradictingStudies.length,
-      weightedEffectSize: claim.effectSize,
-      uncertaintyScore: consensusStatus === "well-established" ? 15 + Math.floor(Math.random() * 15) : consensusStatus === "contested" ? 40 + Math.floor(Math.random() * 25) : 60 + Math.floor(Math.random() * 25),
-      moderatingVariables: ["Age", "Baseline risk", "Comorbidities", "Genetic variants"][Math.floor(Math.random() * 4)] + " significantly modify the effect magnitude. Subgroup analyses suggest stronger effects in higher-risk populations.",
-      methodologicalConcerns: claim.evidenceQuality === "A"
-        ? "Most included trials are well-conducted with low risk of bias. Publication bias appears minimal based on funnel plot symmetry."
-        : "Some included studies have moderate risk of bias from non-blinded outcome assessment. Heterogeneity in dose and follow-up duration limits direct comparison.",
-      temporalTrend: "Effect estimates have remained stable across studies published over the last decade",
-    });
+      totalClaims++;
+    }
   }
 
-  console.log("Seed complete!");
+  console.log(`Seed complete: ${TOPICS.length} topics, ${totalClaims} claims`);
   await pool.end();
   process.exit(0);
 }

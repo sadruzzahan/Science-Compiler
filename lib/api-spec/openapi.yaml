@@ -53,6 +53,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Topic"
+    post:
+      operationId: createTopic
+      tags: [topics]
+      summary: Create a new topic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTopicBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topic"
 
   /topics/{id}:
     get:
@@ -78,6 +95,124 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateTopic
+      tags: [topics]
+      summary: Update a topic
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTopicBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topic"
+    delete:
+      operationId: deleteTopic
+      tags: [topics]
+      summary: Delete a topic
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /claims/{id}/synthesis:
+    get:
+      operationId: getClaimSynthesis
+      tags: [synthesis]
+      summary: Get the synthesis record for a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Claim synthesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimSynthesis"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /evidence-links:
+    post:
+      operationId: createEvidenceLink
+      tags: [evidence]
+      summary: Create a new evidence link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEvidenceLinkBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceLink"
+
+  /evidence-links/{id}:
+    patch:
+      operationId: updateEvidenceLink
+      tags: [evidence]
+      summary: Update an evidence link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEvidenceLinkBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceLink"
+    delete:
+      operationId: deleteEvidenceLink
+      tags: [evidence]
+      summary: Delete an evidence link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /topics/stats:
     get:
@@ -133,6 +268,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PapersListResponse"
+    post:
+      operationId: createPaper
+      tags: [papers]
+      summary: Create a new paper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaperBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paper"
 
   /papers/{id}:
     get:
@@ -158,6 +310,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updatePaper
+      tags: [papers]
+      summary: Update a paper
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaperBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paper"
+    delete:
+      operationId: deletePaper
+      tags: [papers]
+      summary: Delete a paper
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /claims:
     get:
@@ -200,6 +388,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ClaimsListResponse"
+    post:
+      operationId: createClaim
+      tags: [claims]
+      summary: Create a new claim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClaimBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Claim"
 
   /claims/{id}:
     get:
@@ -225,6 +430,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateClaim
+      tags: [claims]
+      summary: Update a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClaimBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Claim"
+    delete:
+      operationId: deleteClaim
+      tags: [claims]
+      summary: Delete a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /studies:
+    post:
+      operationId: createStudy
+      tags: [studies]
+      summary: Create a new study
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStudyBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Study"
 
   /studies/{id}:
     get:
@@ -250,6 +510,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateStudy
+      tags: [studies]
+      summary: Update a study
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStudyBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Study"
+    delete:
+      operationId: deleteStudy
+      tags: [studies]
+      summary: Delete a study
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /query:
     get:
@@ -901,6 +1197,268 @@ components:
       required:
         - query
         - noResults
+
+    CreateTopicBody:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        domain:
+          type: string
+      required: [name, slug, description, domain]
+
+    UpdateTopicBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        slug:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        domain:
+          type: ["string", "null"]
+
+    CreatePaperBody:
+      type: object
+      properties:
+        topicId:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        journal:
+          type: string
+        publicationYear:
+          type: integer
+        doi:
+          type: ["string", "null"]
+        pmid:
+          type: ["string", "null"]
+        abstract:
+          type: string
+        methodologyType:
+          type: string
+        sampleSize:
+          type: ["integer", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: ["string", "null"]
+        openAccessUrl:
+          type: ["string", "null"]
+      required: [topicId, title, authors, journal, publicationYear, abstract, methodologyType, evidenceQuality]
+
+    UpdatePaperBody:
+      type: object
+      properties:
+        topicId:
+          type: ["integer", "null"]
+        title:
+          type: ["string", "null"]
+        authors:
+          type: ["string", "null"]
+        journal:
+          type: ["string", "null"]
+        publicationYear:
+          type: ["integer", "null"]
+        doi:
+          type: ["string", "null"]
+        pmid:
+          type: ["string", "null"]
+        abstract:
+          type: ["string", "null"]
+        methodologyType:
+          type: ["string", "null"]
+        sampleSize:
+          type: ["integer", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: ["string", "null"]
+        replicationStatus:
+          type: ["string", "null"]
+        openAccessUrl:
+          type: ["string", "null"]
+
+    CreateClaimBody:
+      type: object
+      properties:
+        topicId:
+          type: integer
+        paperId:
+          type: integer
+        claimText:
+          type: string
+        direction:
+          type: string
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        population:
+          type: string
+        conditions:
+          type: ["string", "null"]
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        replicationStatus:
+          type: ["string", "null"]
+        nReplications:
+          type: ["integer", "null"]
+      required: [topicId, paperId, claimText, direction, population, methodologyType, evidenceQuality]
+
+    UpdateClaimBody:
+      type: object
+      properties:
+        topicId:
+          type: ["integer", "null"]
+        paperId:
+          type: ["integer", "null"]
+        claimText:
+          type: ["string", "null"]
+        direction:
+          type: ["string", "null"]
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        population:
+          type: ["string", "null"]
+        conditions:
+          type: ["string", "null"]
+        methodologyType:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: ["string", "null"]
+        replicationStatus:
+          type: ["string", "null"]
+        nReplications:
+          type: ["integer", "null"]
+
+    CreateStudyBody:
+      type: object
+      properties:
+        paperId:
+          type: integer
+        topicId:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        publicationYear:
+          type: integer
+        methodologyType:
+          type: string
+        sampleSize:
+          type: ["integer", "null"]
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: string
+        population:
+          type: string
+        preregistered:
+          type: ["integer", "null"]
+      required: [paperId, topicId, title, authors, publicationYear, methodologyType, evidenceQuality, population]
+
+    UpdateStudyBody:
+      type: object
+      properties:
+        paperId:
+          type: ["integer", "null"]
+        topicId:
+          type: ["integer", "null"]
+        title:
+          type: ["string", "null"]
+        authors:
+          type: ["string", "null"]
+        publicationYear:
+          type: ["integer", "null"]
+        methodologyType:
+          type: ["string", "null"]
+        sampleSize:
+          type: ["integer", "null"]
+        effectSize:
+          type: ["number", "null"]
+        effectSizeUnit:
+          type: ["string", "null"]
+        ciLower:
+          type: ["number", "null"]
+        ciUpper:
+          type: ["number", "null"]
+        pValue:
+          type: ["string", "null"]
+        evidenceQuality:
+          type: ["string", "null"]
+        population:
+          type: ["string", "null"]
+        preregistered:
+          type: ["integer", "null"]
+
+    EvidenceLink:
+      type: object
+      properties:
+        id:
+          type: integer
+        claimId:
+          type: integer
+        studyId:
+          type: integer
+        direction:
+          type: string
+        contradictionExplanation:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, claimId, studyId, direction, createdAt]
+
+    CreateEvidenceLinkBody:
+      type: object
+      properties:
+        claimId:
+          type: integer
+        studyId:
+          type: integer
+        direction:
+          type: string
+        contradictionExplanation:
+          type: ["string", "null"]
+      required: [claimId, studyId, direction]
+
+    UpdateEvidenceLinkBody:
+      type: object
+      properties:
+        direction:
+          type: ["string", "null"]
+        contradictionExplanation:
+          type: ["string", "null"]
 
     RecentActivity:
       type: object

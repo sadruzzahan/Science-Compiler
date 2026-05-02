@@ -4,6 +4,7 @@ import topicsRouter from "./topics";
 import papersRouter from "./papers";
 import claimsRouter from "./claims";
 import studiesRouter from "./studies";
+import evidenceLinksRouter from "./evidence_links";
 import queryRouter from "./query";
 
 const router: IRouter = Router();
@@ -13,6 +14,7 @@ router.use(topicsRouter);
 router.use(papersRouter);
 router.use(claimsRouter);
 router.use(studiesRouter);
+router.use(evidenceLinksRouter);
 router.use(queryRouter);
 
 export default router;

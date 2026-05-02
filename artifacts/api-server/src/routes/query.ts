@@ -103,10 +103,24 @@ router.get("/query", async (req, res): Promise<void> => {
   const { q } = queryParams.data;
   const searchTerms = q.toLowerCase().split(/\s+/).filter(t => t.length > 2);
 
-  // Full-text search across claim text and topic names
-  const searchPattern = `%${q}%`;
+  if (searchTerms.length === 0) {
+    res.json(QueryKnowledgeBaseResponse.parse({ query: q, noResults: true }));
+    return;
+  }
 
-  const matchingClaims = await db
+  // Build OR conditions for any term matching any field
+  const termConditions = searchTerms.flatMap(term => {
+    const pat = `%${term}%`;
+    return [
+      ilike(claimsTable.claimText, pat),
+      ilike(claimsTable.population, pat),
+      ilike(claimsTable.conditions, pat),
+      ilike(topicsTable.name, pat),
+      ilike(papersTable.title, pat),
+    ];
+  });
+
+  const candidates = await db
     .select({
       id: claimsTable.id,
       topicId: claimsTable.topicId,
@@ -131,24 +145,42 @@ router.get("/query", async (req, res): Promise<void> => {
     .from(claimsTable)
     .leftJoin(topicsTable, eq(claimsTable.topicId, topicsTable.id))
     .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
-    .where(
-      or(
-        ilike(claimsTable.claimText, searchPattern),
-        ilike(claimsTable.population, searchPattern),
-        ilike(topicsTable.name, searchPattern),
-        ilike(papersTable.title, searchPattern),
-        ilike(claimsTable.conditions, searchPattern),
-      )
-    )
-    .limit(10);
+    .where(or(...termConditions))
+    .limit(50);
 
-  if (matchingClaims.length === 0) {
+  if (candidates.length === 0) {
     res.json(QueryKnowledgeBaseResponse.parse({ query: q, noResults: true }));
     return;
   }
 
-  // Get the best match's full detail
-  const bestMatch = matchingClaims[0];
+  // Tokenized relevance scoring: weight matches in claimText > topic > population/conditions > paperTitle
+  function scoreClaim(c: typeof candidates[number]): number {
+    const claim = c.claimText.toLowerCase();
+    const topic = (c.topicName ?? "").toLowerCase();
+    const paper = (c.paperTitle ?? "").toLowerCase();
+    const pop = (c.population ?? "").toLowerCase();
+    const cond = (c.conditions ?? "").toLowerCase();
+    let score = 0;
+    for (const term of searchTerms) {
+      if (claim.includes(term)) score += 5;
+      if (topic.includes(term)) score += 3;
+      if (pop.includes(term)) score += 2;
+      if (cond.includes(term)) score += 2;
+      if (paper.includes(term)) score += 1;
+    }
+    // Bonus for higher quality evidence
+    if (c.evidenceQuality === "A") score += 1;
+    return score;
+  }
+
+  // Sort by score desc, then deterministic by id asc
+  const ranked = [...candidates].sort((a, b) => {
+    const sd = scoreClaim(b) - scoreClaim(a);
+    if (sd !== 0) return sd;
+    return a.id - b.id;
+  });
+
+  const bestMatch = ranked[0];
   const claimId = bestMatch.id;
 
   const [synthesis] = await db

@@ -285,6 +285,216 @@ export interface QueryResult {
   noResults: boolean;
 }
 
+export interface CreateTopicBody {
+  name: string;
+  slug: string;
+  description: string;
+  domain: string;
+}
+
+export interface UpdateTopicBody {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  slug?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  domain?: string | null;
+}
+
+export interface CreatePaperBody {
+  topicId: number;
+  title: string;
+  authors: string;
+  journal: string;
+  publicationYear: number;
+  /** @nullable */
+  doi?: string | null;
+  /** @nullable */
+  pmid?: string | null;
+  abstract: string;
+  methodologyType: string;
+  /** @nullable */
+  sampleSize?: number | null;
+  /** @nullable */
+  pValue?: string | null;
+  evidenceQuality: string;
+  /** @nullable */
+  replicationStatus?: string | null;
+  /** @nullable */
+  openAccessUrl?: string | null;
+}
+
+export interface UpdatePaperBody {
+  /** @nullable */
+  topicId?: number | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  authors?: string | null;
+  /** @nullable */
+  journal?: string | null;
+  /** @nullable */
+  publicationYear?: number | null;
+  /** @nullable */
+  doi?: string | null;
+  /** @nullable */
+  pmid?: string | null;
+  /** @nullable */
+  abstract?: string | null;
+  /** @nullable */
+  methodologyType?: string | null;
+  /** @nullable */
+  sampleSize?: number | null;
+  /** @nullable */
+  pValue?: string | null;
+  /** @nullable */
+  evidenceQuality?: string | null;
+  /** @nullable */
+  replicationStatus?: string | null;
+  /** @nullable */
+  openAccessUrl?: string | null;
+}
+
+export interface CreateClaimBody {
+  topicId: number;
+  paperId: number;
+  claimText: string;
+  direction: string;
+  /** @nullable */
+  effectSize?: number | null;
+  /** @nullable */
+  effectSizeUnit?: string | null;
+  /** @nullable */
+  ciLower?: number | null;
+  /** @nullable */
+  ciUpper?: number | null;
+  population: string;
+  /** @nullable */
+  conditions?: string | null;
+  methodologyType: string;
+  evidenceQuality: string;
+  /** @nullable */
+  replicationStatus?: string | null;
+  /** @nullable */
+  nReplications?: number | null;
+}
+
+export interface UpdateClaimBody {
+  /** @nullable */
+  topicId?: number | null;
+  /** @nullable */
+  paperId?: number | null;
+  /** @nullable */
+  claimText?: string | null;
+  /** @nullable */
+  direction?: string | null;
+  /** @nullable */
+  effectSize?: number | null;
+  /** @nullable */
+  effectSizeUnit?: string | null;
+  /** @nullable */
+  ciLower?: number | null;
+  /** @nullable */
+  ciUpper?: number | null;
+  /** @nullable */
+  population?: string | null;
+  /** @nullable */
+  conditions?: string | null;
+  /** @nullable */
+  methodologyType?: string | null;
+  /** @nullable */
+  evidenceQuality?: string | null;
+  /** @nullable */
+  replicationStatus?: string | null;
+  /** @nullable */
+  nReplications?: number | null;
+}
+
+export interface CreateStudyBody {
+  paperId: number;
+  topicId: number;
+  title: string;
+  authors: string;
+  publicationYear: number;
+  methodologyType: string;
+  /** @nullable */
+  sampleSize?: number | null;
+  /** @nullable */
+  effectSize?: number | null;
+  /** @nullable */
+  effectSizeUnit?: string | null;
+  /** @nullable */
+  ciLower?: number | null;
+  /** @nullable */
+  ciUpper?: number | null;
+  /** @nullable */
+  pValue?: string | null;
+  evidenceQuality: string;
+  population: string;
+  /** @nullable */
+  preregistered?: number | null;
+}
+
+export interface UpdateStudyBody {
+  /** @nullable */
+  paperId?: number | null;
+  /** @nullable */
+  topicId?: number | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  authors?: string | null;
+  /** @nullable */
+  publicationYear?: number | null;
+  /** @nullable */
+  methodologyType?: string | null;
+  /** @nullable */
+  sampleSize?: number | null;
+  /** @nullable */
+  effectSize?: number | null;
+  /** @nullable */
+  effectSizeUnit?: string | null;
+  /** @nullable */
+  ciLower?: number | null;
+  /** @nullable */
+  ciUpper?: number | null;
+  /** @nullable */
+  pValue?: string | null;
+  /** @nullable */
+  evidenceQuality?: string | null;
+  /** @nullable */
+  population?: string | null;
+  /** @nullable */
+  preregistered?: number | null;
+}
+
+export interface EvidenceLink {
+  id: number;
+  claimId: number;
+  studyId: number;
+  direction: string;
+  /** @nullable */
+  contradictionExplanation?: string | null;
+  createdAt: string;
+}
+
+export interface CreateEvidenceLinkBody {
+  claimId: number;
+  studyId: number;
+  direction: string;
+  /** @nullable */
+  contradictionExplanation?: string | null;
+}
+
+export interface UpdateEvidenceLinkBody {
+  /** @nullable */
+  direction?: string | null;
+  /** @nullable */
+  contradictionExplanation?: string | null;
+}
+
 export interface RecentActivity {
   recentClaims: ClaimWithSynthesis[];
   recentPapers: PaperSummary[];

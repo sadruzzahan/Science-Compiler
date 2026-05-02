@@ -7,6 +7,9 @@ import {
   GetTopicsStatsResponse,
   ListTopicsResponse,
   GetPaperResponse,
+  CreateTopicBody,
+  UpdateTopicBody,
+  UpdateTopicResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 
@@ -181,6 +184,65 @@ router.get("/topics/:id", async (req, res): Promise<void> => {
   };
 
   res.json(GetTopicResponse.parse(result));
+});
+
+async function buildTopicResponse(topic: typeof topicsTable.$inferSelect) {
+  const [claimCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(claimsTable)
+    .where(eq(claimsTable.topicId, topic.id));
+  const [paperCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(papersTable)
+    .where(eq(papersTable.topicId, topic.id));
+  const synthesisCounts = await db
+    .select({
+      consensusStatus: claimSynthesisTable.consensusStatus,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(claimSynthesisTable)
+    .where(eq(claimSynthesisTable.topicId, topic.id))
+    .groupBy(claimSynthesisTable.consensusStatus);
+  const statusMap: Record<string, number> = {};
+  for (const row of synthesisCounts) statusMap[row.consensusStatus] = row.count;
+  return {
+    ...topic,
+    createdAt: topic.createdAt.toISOString(),
+    claimCount: claimCountRow?.count ?? 0,
+    paperCount: paperCountRow?.count ?? 0,
+    wellEstablishedCount: statusMap["well-established"] ?? 0,
+    contestedCount: statusMap["contested"] ?? 0,
+  };
+}
+
+router.post("/topics", async (req, res): Promise<void> => {
+  const body = CreateTopicBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [topic] = await db.insert(topicsTable).values(body.data).returning();
+  res.status(201).json(UpdateTopicResponse.parse(await buildTopicResponse(topic!)));
+});
+
+router.patch("/topics/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const body = UpdateTopicBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  type TopicInsert = typeof topicsTable.$inferInsert;
+  const cleaned: Partial<TopicInsert> = {};
+  for (const [k, v] of Object.entries(body.data)) {
+    if (v !== null && v !== undefined) (cleaned as Record<string, unknown>)[k] = v;
+  }
+  const [topic] = await db.update(topicsTable).set(cleaned).where(eq(topicsTable.id, id)).returning();
+  if (!topic) { res.status(404).json({ error: "Topic not found" }); return; }
+  res.json(UpdateTopicResponse.parse(await buildTopicResponse(topic)));
+});
+
+router.delete("/topics/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const result = await db.delete(topicsTable).where(eq(topicsTable.id, id)).returning({ id: topicsTable.id });
+  if (result.length === 0) { res.status(404).json({ error: "Topic not found" }); return; }
+  res.status(204).send();
 });
 
 export default router;

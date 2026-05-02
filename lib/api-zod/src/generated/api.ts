@@ -33,6 +33,16 @@ export const ListTopicsResponseItem = zod.object({
 export const ListTopicsResponse = zod.array(ListTopicsResponseItem);
 
 /**
+ * @summary Create a new topic
+ */
+export const CreateTopicBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  domain: zod.string(),
+});
+
+/**
  * @summary Get topic by ID
  */
 export const GetTopicParams = zod.object({
@@ -63,6 +73,100 @@ export const GetTopicResponse = zod.object({
     }),
   ),
   createdAt: zod.string(),
+});
+
+/**
+ * @summary Update a topic
+ */
+export const UpdateTopicParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTopicBody = zod.object({
+  name: zod.string().nullish(),
+  slug: zod.string().nullish(),
+  description: zod.string().nullish(),
+  domain: zod.string().nullish(),
+});
+
+export const UpdateTopicResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  domain: zod.string(),
+  claimCount: zod.number(),
+  paperCount: zod.number(),
+  wellEstablishedCount: zod.number(),
+  contestedCount: zod.number(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a topic
+ */
+export const DeleteTopicParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get the synthesis record for a claim
+ */
+export const GetClaimSynthesisParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetClaimSynthesisResponse = zod.object({
+  id: zod.number(),
+  claimId: zod.number(),
+  consensusStatus: zod.string(),
+  synthesisText: zod.string(),
+  supportingCount: zod.number(),
+  contradictingCount: zod.number(),
+  weightedEffectSize: zod.number().nullish(),
+  uncertaintyScore: zod.number(),
+  moderatingVariables: zod.string().nullish(),
+  methodologicalConcerns: zod.string().nullish(),
+  temporalTrend: zod.string().nullish(),
+  lastUpdated: zod.string(),
+});
+
+/**
+ * @summary Create a new evidence link
+ */
+export const CreateEvidenceLinkBody = zod.object({
+  claimId: zod.number(),
+  studyId: zod.number(),
+  direction: zod.string(),
+  contradictionExplanation: zod.string().nullish(),
+});
+
+/**
+ * @summary Update an evidence link
+ */
+export const UpdateEvidenceLinkParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateEvidenceLinkBody = zod.object({
+  direction: zod.string().nullish(),
+  contradictionExplanation: zod.string().nullish(),
+});
+
+export const UpdateEvidenceLinkResponse = zod.object({
+  id: zod.number(),
+  claimId: zod.number(),
+  studyId: zod.number(),
+  direction: zod.string(),
+  contradictionExplanation: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete an evidence link
+ */
+export const DeleteEvidenceLinkParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -131,6 +235,26 @@ export const ListPapersResponse = zod.object({
 });
 
 /**
+ * @summary Create a new paper
+ */
+export const CreatePaperBody = zod.object({
+  topicId: zod.number(),
+  title: zod.string(),
+  authors: zod.string(),
+  journal: zod.string(),
+  publicationYear: zod.number(),
+  doi: zod.string().nullish(),
+  pmid: zod.string().nullish(),
+  abstract: zod.string(),
+  methodologyType: zod.string(),
+  sampleSize: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string(),
+  replicationStatus: zod.string().nullish(),
+  openAccessUrl: zod.string().nullish(),
+});
+
+/**
  * @summary Get paper by ID with its claims
  */
 export const GetPaperParams = zod.object({
@@ -167,6 +291,56 @@ export const GetPaperResponse = zod.object({
     }),
   ),
   createdAt: zod.string(),
+});
+
+/**
+ * @summary Update a paper
+ */
+export const UpdatePaperParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdatePaperBody = zod.object({
+  topicId: zod.number().nullish(),
+  title: zod.string().nullish(),
+  authors: zod.string().nullish(),
+  journal: zod.string().nullish(),
+  publicationYear: zod.number().nullish(),
+  doi: zod.string().nullish(),
+  pmid: zod.string().nullish(),
+  abstract: zod.string().nullish(),
+  methodologyType: zod.string().nullish(),
+  sampleSize: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string().nullish(),
+  replicationStatus: zod.string().nullish(),
+  openAccessUrl: zod.string().nullish(),
+});
+
+export const UpdatePaperResponse = zod.object({
+  id: zod.number(),
+  topicId: zod.number(),
+  title: zod.string(),
+  authors: zod.string(),
+  journal: zod.string(),
+  publicationYear: zod.number(),
+  doi: zod.string().nullish(),
+  pmid: zod.string().nullish(),
+  abstract: zod.string(),
+  methodologyType: zod.string(),
+  sampleSize: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string(),
+  replicationStatus: zod.string(),
+  openAccessUrl: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a paper
+ */
+export const DeletePaperParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -208,6 +382,26 @@ export const ListClaimsResponse = zod.object({
   total: zod.number(),
   limit: zod.number(),
   offset: zod.number(),
+});
+
+/**
+ * @summary Create a new claim
+ */
+export const CreateClaimBody = zod.object({
+  topicId: zod.number(),
+  paperId: zod.number(),
+  claimText: zod.string(),
+  direction: zod.string(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  population: zod.string(),
+  conditions: zod.string().nullish(),
+  methodologyType: zod.string(),
+  evidenceQuality: zod.string(),
+  replicationStatus: zod.string().nullish(),
+  nReplications: zod.number().nullish(),
 });
 
 /**
@@ -311,6 +505,77 @@ export const GetClaimResponse = zod.object({
 });
 
 /**
+ * @summary Update a claim
+ */
+export const UpdateClaimParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateClaimBody = zod.object({
+  topicId: zod.number().nullish(),
+  paperId: zod.number().nullish(),
+  claimText: zod.string().nullish(),
+  direction: zod.string().nullish(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  population: zod.string().nullish(),
+  conditions: zod.string().nullish(),
+  methodologyType: zod.string().nullish(),
+  evidenceQuality: zod.string().nullish(),
+  replicationStatus: zod.string().nullish(),
+  nReplications: zod.number().nullish(),
+});
+
+export const UpdateClaimResponse = zod.object({
+  id: zod.number(),
+  topicId: zod.number(),
+  paperId: zod.number(),
+  claimText: zod.string(),
+  direction: zod.string(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  population: zod.string(),
+  conditions: zod.string().nullish(),
+  methodologyType: zod.string(),
+  evidenceQuality: zod.string(),
+  replicationStatus: zod.string(),
+  nReplications: zod.number(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a claim
+ */
+export const DeleteClaimParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Create a new study
+ */
+export const CreateStudyBody = zod.object({
+  paperId: zod.number(),
+  topicId: zod.number(),
+  title: zod.string(),
+  authors: zod.string(),
+  publicationYear: zod.number(),
+  methodologyType: zod.string(),
+  sampleSize: zod.number().nullish(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string(),
+  population: zod.string(),
+  preregistered: zod.number().nullish(),
+});
+
+/**
  * @summary Get study by ID
  */
 export const GetStudyParams = zod.object({
@@ -335,6 +600,58 @@ export const GetStudyResponse = zod.object({
   population: zod.string(),
   preregistered: zod.number(),
   createdAt: zod.string(),
+});
+
+/**
+ * @summary Update a study
+ */
+export const UpdateStudyParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateStudyBody = zod.object({
+  paperId: zod.number().nullish(),
+  topicId: zod.number().nullish(),
+  title: zod.string().nullish(),
+  authors: zod.string().nullish(),
+  publicationYear: zod.number().nullish(),
+  methodologyType: zod.string().nullish(),
+  sampleSize: zod.number().nullish(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string().nullish(),
+  population: zod.string().nullish(),
+  preregistered: zod.number().nullish(),
+});
+
+export const UpdateStudyResponse = zod.object({
+  id: zod.number(),
+  paperId: zod.number(),
+  topicId: zod.number(),
+  title: zod.string(),
+  authors: zod.string(),
+  publicationYear: zod.number(),
+  methodologyType: zod.string(),
+  sampleSize: zod.number().nullish(),
+  effectSize: zod.number().nullish(),
+  effectSizeUnit: zod.string().nullish(),
+  ciLower: zod.number().nullish(),
+  ciUpper: zod.number().nullish(),
+  pValue: zod.string().nullish(),
+  evidenceQuality: zod.string(),
+  population: zod.string(),
+  preregistered: zod.number(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a study
+ */
+export const DeleteStudyParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
