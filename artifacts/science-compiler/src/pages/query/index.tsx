@@ -341,7 +341,7 @@ function ShareButton({ shareId }: { shareId: string }) {
 
 export default function QueryPage() {
   const search = useSearch();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const sharedId = new URLSearchParams(search).get("synthesis");
 
   const [inputValue, setInputValue] = useState("");
@@ -397,7 +397,7 @@ export default function QueryPage() {
     if (!q) return;
     // Submitting a new query supersedes any shared link.
     if (sharedId) {
-      setLocation(location, { replace: true });
+      setLocation("/", { replace: true });
       setSharedResult(null);
     }
     setSubmittedQuery(q);
@@ -407,7 +407,7 @@ export default function QueryPage() {
     setSubmittedQuery(null);
     setInputValue("");
     if (sharedId) {
-      setLocation(location, { replace: true });
+      setLocation("/", { replace: true });
       setSharedResult(null);
     }
   }
