@@ -551,6 +551,39 @@ export interface IngestionRun {
   createdAt: string;
 }
 
+export interface IngestionRunResultPaper {
+  id: number;
+  title: string;
+  authors: string;
+  journal: string;
+  publicationYear: number;
+  methodologyType: string;
+  evidenceQuality: string;
+  /** @nullable */
+  pmid?: string | null;
+  /** @nullable */
+  doi?: string | null;
+  claimsCount: number;
+  createdAt: string;
+}
+
+export interface IngestionRunResultClaim {
+  id: number;
+  paperId: number;
+  paperTitle: string;
+  claimText: string;
+  direction: string;
+  evidenceQuality: string;
+  population: string;
+  createdAt: string;
+}
+
+export interface IngestionRunResults {
+  run: IngestionRun;
+  papers: IngestionRunResultPaper[];
+  claims: IngestionRunResultClaim[];
+}
+
 export interface IngestionConfig {
   id: number;
   topicId: number;

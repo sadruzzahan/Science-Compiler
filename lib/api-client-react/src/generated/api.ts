@@ -34,6 +34,7 @@ import type {
   HealthStatus,
   IngestionConfig,
   IngestionRun,
+  IngestionRunResults,
   ListClaimsParams,
   ListEvidenceLinksParams,
   ListIngestionRunsParams,
@@ -2829,6 +2830,94 @@ export function useListIngestionRuns<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListIngestionRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get papers and claims created during a specific ingestion run
+ */
+export const getGetIngestionRunResultsUrl = (id: number) => {
+  return `/api/admin/ingestion-runs/${id}/results`;
+};
+
+export const getIngestionRunResults = async (
+  id: number,
+  options?: RequestInit,
+): Promise<IngestionRunResults> => {
+  return customFetch<IngestionRunResults>(getGetIngestionRunResultsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetIngestionRunResultsQueryKey = (id: number) => {
+  return [`/api/admin/ingestion-runs/${id}/results`] as const;
+};
+
+export const getGetIngestionRunResultsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getIngestionRunResults>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getIngestionRunResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetIngestionRunResultsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getIngestionRunResults>>
+  > = ({ signal }) => getIngestionRunResults(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getIngestionRunResults>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetIngestionRunResultsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getIngestionRunResults>>
+>;
+export type GetIngestionRunResultsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get papers and claims created during a specific ingestion run
+ */
+
+export function useGetIngestionRunResults<
+  TData = Awaited<ReturnType<typeof getIngestionRunResults>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getIngestionRunResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetIngestionRunResultsQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

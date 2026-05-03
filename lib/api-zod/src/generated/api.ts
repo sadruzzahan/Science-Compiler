@@ -945,6 +945,58 @@ export const ListIngestionRunsResponse = zod.array(
 );
 
 /**
+ * @summary Get papers and claims created during a specific ingestion run
+ */
+export const GetIngestionRunResultsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetIngestionRunResultsResponse = zod.object({
+  run: zod.object({
+    id: zod.number(),
+    topicId: zod.number().nullish(),
+    topicName: zod.string().nullish(),
+    status: zod.string(),
+    triggeredBy: zod.string(),
+    papersFound: zod.number(),
+    papersProcessed: zod.number(),
+    claimsExtracted: zod.number(),
+    errorsCount: zod.number(),
+    errorDetails: zod.string().nullish(),
+    startedAt: zod.string(),
+    completedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+  }),
+  papers: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      authors: zod.string(),
+      journal: zod.string(),
+      publicationYear: zod.number(),
+      methodologyType: zod.string(),
+      evidenceQuality: zod.string(),
+      pmid: zod.string().nullish(),
+      doi: zod.string().nullish(),
+      claimsCount: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+  claims: zod.array(
+    zod.object({
+      id: zod.number(),
+      paperId: zod.number(),
+      paperTitle: zod.string(),
+      claimText: zod.string(),
+      direction: zod.string(),
+      evidenceQuality: zod.string(),
+      population: zod.string(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary Trigger an immediate ingestion run
  */
 export const TriggerIngestionBody = zod.object({

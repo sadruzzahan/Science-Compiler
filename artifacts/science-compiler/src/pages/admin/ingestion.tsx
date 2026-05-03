@@ -11,6 +11,8 @@ import {
   useDeleteIngestionConfig,
   useListTopics,
   getListTopicsQueryKey,
+  useGetIngestionRunResults,
+  getGetIngestionRunResultsQueryKey,
   type IngestionConfig,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Clock, Loader2, RefreshCw } from "lucide-react";
+import { Play, Plus, Pencil, Trash2, AlertTriangle, CheckCircle, Clock, Loader2, RefreshCw, FileSearch } from "lucide-react";
 
 function statusBadge(status: string) {
   if (status === "completed") return <Badge className="bg-green-100 text-green-800 border-green-200"><CheckCircle className="h-3 w-3 mr-1" />Completed</Badge>;
@@ -83,6 +88,19 @@ export default function AdminIngestionPage() {
   const [editingConfig, setEditingConfig] = useState<IngestionConfig | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [form, setForm] = useState<ConfigFormData>(DEFAULT_FORM);
+  const [resultsRunId, setResultsRunId] = useState<number | null>(null);
+  const [resultsTab, setResultsTab] = useState<"papers" | "claims">("papers");
+  const [resultsSearch, setResultsSearch] = useState("");
+
+  const { data: runResults, isLoading: resultsLoading, isError: resultsError } = useGetIngestionRunResults(
+    resultsRunId ?? 0,
+    {
+      query: {
+        queryKey: getGetIngestionRunResultsQueryKey(resultsRunId ?? 0),
+        enabled: resultsRunId !== null,
+      },
+    }
+  );
 
   const { data: runs, isLoading: runsLoading, isError: runsError } = useListIngestionRuns(
     { limit: 50 },
@@ -281,7 +299,24 @@ export default function AdminIngestionPage() {
                         <span className="text-sm font-medium">{run.topicName ?? (run.topicId ? `Topic #${run.topicId}` : "All Topics")}</span>
                         <span className="text-xs text-muted-foreground capitalize">· {run.triggeredBy}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">{formatDate(run.startedAt)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{formatDate(run.startedAt)}</span>
+                        {(run.status === "completed" || run.status === "failed") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setResultsRunId(run.id);
+                              setResultsTab("papers");
+                              setResultsSearch("");
+                            }}
+                            data-testid={`view-results-${run.id}`}
+                          >
+                            <FileSearch className="h-3 w-3 mr-1" /> View Results
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>{run.papersFound} found</span>
@@ -376,6 +411,104 @@ export default function AdminIngestionPage() {
               {isMutating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingConfig ? "Save Changes" : "Create"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resultsRunId !== null} onOpenChange={(open) => !open && setResultsRunId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Ingestion Run #{resultsRunId} Results</DialogTitle>
+            <DialogDescription>
+              {runResults?.run
+                ? <>Papers and claims created during this run for {runResults.run.topicName ?? (runResults.run.topicId ? `Topic #${runResults.run.topicId}` : "all topics")}.</>
+                : "Loading run details..."}
+            </DialogDescription>
+          </DialogHeader>
+          {resultsLoading ? (
+            <div className="space-y-2 py-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : resultsError ? (
+            <div className="flex items-center gap-2 text-destructive text-sm py-4"><AlertTriangle className="h-4 w-4" /> Failed to load results.</div>
+          ) : runResults ? (
+            <Tabs value={resultsTab} onValueChange={(v) => setResultsTab(v as "papers" | "claims")}>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <TabsList>
+                  <TabsTrigger value="papers" data-testid="results-tab-papers">
+                    Papers ({runResults.papers.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="claims" data-testid="results-tab-claims">
+                    Claims ({runResults.claims.length})
+                  </TabsTrigger>
+                </TabsList>
+                <Input
+                  placeholder={resultsTab === "papers" ? "Search title, authors, journal..." : "Search claim text or population..."}
+                  value={resultsSearch}
+                  onChange={(e) => setResultsSearch(e.target.value)}
+                  className="max-w-xs h-8"
+                  data-testid="results-search-input"
+                />
+              </div>
+              <TabsContent value="papers">
+                <ScrollArea className="h-[420px] pr-3">
+                  {(() => {
+                    const q = resultsSearch.trim().toLowerCase();
+                    const filtered = runResults.papers.filter(p =>
+                      !q || p.title.toLowerCase().includes(q) || p.authors.toLowerCase().includes(q) || p.journal.toLowerCase().includes(q)
+                    );
+                    if (!filtered.length) return <div className="text-center py-10 text-sm text-muted-foreground">No papers match.</div>;
+                    return (
+                      <div className="divide-y">
+                        {filtered.map(p => (
+                          <div key={p.id} className="py-3" data-testid={`result-paper-${p.id}`}>
+                            <div className="flex items-start justify-between gap-3 mb-1">
+                              <p className="text-sm font-medium leading-snug">{p.title}</p>
+                              <Badge variant="secondary" className="text-xs flex-shrink-0">{p.claimsCount} claims</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">{p.authors}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 flex-wrap">
+                              <span>{p.journal} · {p.publicationYear}</span>
+                              <Badge variant="outline" className="text-[10px]">{p.methodologyType}</Badge>
+                              <Badge variant="outline" className="text-[10px]">{p.evidenceQuality}</Badge>
+                              {p.pmid && <a href={`https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`} target="_blank" rel="noreferrer" className="text-primary hover:underline">PMID {p.pmid}</a>}
+                              {p.doi && <a href={`https://doi.org/${p.doi}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">DOI</a>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="claims">
+                <ScrollArea className="h-[420px] pr-3">
+                  {(() => {
+                    const q = resultsSearch.trim().toLowerCase();
+                    const filtered = runResults.claims.filter(c =>
+                      !q || c.claimText.toLowerCase().includes(q) || c.population.toLowerCase().includes(q) || c.paperTitle.toLowerCase().includes(q)
+                    );
+                    if (!filtered.length) return <div className="text-center py-10 text-sm text-muted-foreground">No claims match.</div>;
+                    return (
+                      <div className="divide-y">
+                        {filtered.map(c => (
+                          <div key={c.id} className="py-3" data-testid={`result-claim-${c.id}`}>
+                            <p className="text-sm leading-snug mb-1">{c.claimText}</p>
+                            <p className="text-xs text-muted-foreground italic mb-1 truncate">from: {c.paperTitle}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                              <Badge variant="outline" className="text-[10px]">{c.direction}</Badge>
+                              <Badge variant="outline" className="text-[10px]">{c.evidenceQuality}</Badge>
+                              <span>{c.population}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResultsRunId(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

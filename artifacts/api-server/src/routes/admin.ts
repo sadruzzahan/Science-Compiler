@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
-import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable } from "@workspace/db";
+import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
+import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable, papersTable, claimsTable } from "@workspace/db";
 import { runIngestion } from "../lib/ingestionWorker";
 import { acquireIngestionLock, releaseIngestionLock } from "../lib/ingestionScheduler";
 import { logger } from "../lib/logger";
@@ -28,6 +28,88 @@ router.get("/admin/ingestion-runs", async (req, res): Promise<void> => {
     createdAt: r.run.createdAt.toISOString(),
     topicName: r.topicName ?? null,
   })));
+});
+
+router.get("/admin/ingestion-runs/:id/results", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [runRow] = await db
+    .select({ run: ingestionRunsTable, topicName: topicsTable.name })
+    .from(ingestionRunsTable)
+    .leftJoin(topicsTable, eq(ingestionRunsTable.topicId, topicsTable.id))
+    .where(eq(ingestionRunsTable.id, id))
+    .limit(1);
+
+  if (!runRow) { res.status(404).json({ error: "Ingestion run not found" }); return; }
+
+  const startedAt = runRow.run.startedAt;
+  const endedAt = runRow.run.completedAt ?? new Date();
+
+  const paperConds = [
+    gte(papersTable.createdAt, startedAt),
+    lte(papersTable.createdAt, endedAt),
+  ];
+  if (runRow.run.topicId != null) paperConds.push(eq(papersTable.topicId, runRow.run.topicId));
+
+  const papersRows = await db
+    .select({
+      id: papersTable.id,
+      title: papersTable.title,
+      authors: papersTable.authors,
+      journal: papersTable.journal,
+      publicationYear: papersTable.publicationYear,
+      methodologyType: papersTable.methodologyType,
+      evidenceQuality: papersTable.evidenceQuality,
+      pmid: papersTable.pmid,
+      doi: papersTable.doi,
+      createdAt: papersTable.createdAt,
+      claimsCount: sql<number>`(select count(*)::int from ${claimsTable} where ${claimsTable.paperId} = ${papersTable.id})`,
+    })
+    .from(papersTable)
+    .where(and(...paperConds))
+    .orderBy(desc(papersTable.createdAt));
+
+  const claimConds = [
+    gte(claimsTable.createdAt, startedAt),
+    lte(claimsTable.createdAt, endedAt),
+  ];
+  if (runRow.run.topicId != null) claimConds.push(eq(claimsTable.topicId, runRow.run.topicId));
+
+  const claimsRows = await db
+    .select({
+      id: claimsTable.id,
+      paperId: claimsTable.paperId,
+      paperTitle: papersTable.title,
+      claimText: claimsTable.claimText,
+      direction: claimsTable.direction,
+      evidenceQuality: claimsTable.evidenceQuality,
+      population: claimsTable.population,
+      createdAt: claimsTable.createdAt,
+    })
+    .from(claimsTable)
+    .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
+    .where(and(...claimConds))
+    .orderBy(desc(claimsTable.createdAt));
+
+  res.json({
+    run: {
+      ...runRow.run,
+      topicName: runRow.topicName ?? null,
+      startedAt: runRow.run.startedAt.toISOString(),
+      completedAt: runRow.run.completedAt?.toISOString() ?? null,
+      createdAt: runRow.run.createdAt.toISOString(),
+    },
+    papers: papersRows.map(p => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+    })),
+    claims: claimsRows.map(c => ({
+      ...c,
+      paperTitle: c.paperTitle ?? "(unknown paper)",
+      createdAt: c.createdAt.toISOString(),
+    })),
+  });
 });
 
 router.post("/admin/ingestion/run", async (req, res): Promise<void> => {

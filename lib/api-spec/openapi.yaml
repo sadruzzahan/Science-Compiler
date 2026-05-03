@@ -722,6 +722,31 @@ paths:
                 items:
                   $ref: "#/components/schemas/IngestionRun"
 
+  /admin/ingestion-runs/{id}/results:
+    get:
+      operationId: getIngestionRunResults
+      tags: [admin]
+      summary: Get papers and claims created during a specific ingestion run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Papers and claims for the run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionRunResults"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/ingestion/run:
     post:
       operationId: triggerIngestion
@@ -1780,6 +1805,69 @@ components:
         createdAt:
           type: string
       required: [id, status, triggeredBy, papersFound, papersProcessed, claimsExtracted, errorsCount, startedAt, createdAt]
+
+    IngestionRunResultPaper:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        authors:
+          type: string
+        journal:
+          type: string
+        publicationYear:
+          type: integer
+        methodologyType:
+          type: string
+        evidenceQuality:
+          type: string
+        pmid:
+          type: ["string", "null"]
+        doi:
+          type: ["string", "null"]
+        claimsCount:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, title, authors, journal, publicationYear, methodologyType, evidenceQuality, claimsCount, createdAt]
+
+    IngestionRunResultClaim:
+      type: object
+      properties:
+        id:
+          type: integer
+        paperId:
+          type: integer
+        paperTitle:
+          type: string
+        claimText:
+          type: string
+        direction:
+          type: string
+        evidenceQuality:
+          type: string
+        population:
+          type: string
+        createdAt:
+          type: string
+      required: [id, paperId, paperTitle, claimText, direction, evidenceQuality, population, createdAt]
+
+    IngestionRunResults:
+      type: object
+      properties:
+        run:
+          $ref: "#/components/schemas/IngestionRun"
+        papers:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngestionRunResultPaper"
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngestionRunResultClaim"
+      required: [run, papers, claims]
 
     IngestionConfig:
       type: object
