@@ -23,14 +23,18 @@ import type {
   ClaimsListResponse,
   CreateClaimBody,
   CreateEvidenceLinkBody,
+  CreateIngestionConfigBody,
   CreatePaperBody,
   CreateStudyBody,
   CreateTopicBody,
   ErrorResponse,
   EvidenceLink,
   HealthStatus,
+  IngestionConfig,
+  IngestionRun,
   ListClaimsParams,
   ListEvidenceLinksParams,
+  ListIngestionRunsParams,
   ListPapersParams,
   Paper,
   PaperDetail,
@@ -42,8 +46,11 @@ import type {
   Topic,
   TopicDetail,
   TopicsStats,
+  TriggerIngestionBody,
+  TriggerIngestionResponse,
   UpdateClaimBody,
   UpdateEvidenceLinkBody,
+  UpdateIngestionConfigBody,
   UpdatePaperBody,
   UpdateStudyBody,
   UpdateTopicBody,
@@ -2450,3 +2457,520 @@ export function useGetRecentActivity<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List recent ingestion runs
+ */
+export const getListIngestionRunsUrl = (params?: ListIngestionRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/ingestion-runs?${stringifiedParams}`
+    : `/api/admin/ingestion-runs`;
+};
+
+export const listIngestionRuns = async (
+  params?: ListIngestionRunsParams,
+  options?: RequestInit,
+): Promise<IngestionRun[]> => {
+  return customFetch<IngestionRun[]>(getListIngestionRunsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListIngestionRunsQueryKey = (
+  params?: ListIngestionRunsParams,
+) => {
+  return [`/api/admin/ingestion-runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListIngestionRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listIngestionRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListIngestionRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listIngestionRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListIngestionRunsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listIngestionRuns>>
+  > = ({ signal }) => listIngestionRuns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listIngestionRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListIngestionRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listIngestionRuns>>
+>;
+export type ListIngestionRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List recent ingestion runs
+ */
+
+export function useListIngestionRuns<
+  TData = Awaited<ReturnType<typeof listIngestionRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListIngestionRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listIngestionRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListIngestionRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Trigger an immediate ingestion run
+ */
+export const getTriggerIngestionUrl = () => {
+  return `/api/admin/ingestion/run`;
+};
+
+export const triggerIngestion = async (
+  triggerIngestionBody?: TriggerIngestionBody,
+  options?: RequestInit,
+): Promise<TriggerIngestionResponse> => {
+  return customFetch<TriggerIngestionResponse>(getTriggerIngestionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(triggerIngestionBody),
+  });
+};
+
+export const getTriggerIngestionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerIngestion>>,
+    TError,
+    { data: BodyType<TriggerIngestionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof triggerIngestion>>,
+  TError,
+  { data: BodyType<TriggerIngestionBody> },
+  TContext
+> => {
+  const mutationKey = ["triggerIngestion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof triggerIngestion>>,
+    { data: BodyType<TriggerIngestionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return triggerIngestion(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TriggerIngestionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof triggerIngestion>>
+>;
+export type TriggerIngestionMutationBody = BodyType<TriggerIngestionBody>;
+export type TriggerIngestionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trigger an immediate ingestion run
+ */
+export const useTriggerIngestion = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerIngestion>>,
+    TError,
+    { data: BodyType<TriggerIngestionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof triggerIngestion>>,
+  TError,
+  { data: BodyType<TriggerIngestionBody> },
+  TContext
+> => {
+  return useMutation(getTriggerIngestionMutationOptions(options));
+};
+
+/**
+ * @summary List ingestion configurations
+ */
+export const getListIngestionConfigsUrl = () => {
+  return `/api/admin/ingestion-configs`;
+};
+
+export const listIngestionConfigs = async (
+  options?: RequestInit,
+): Promise<IngestionConfig[]> => {
+  return customFetch<IngestionConfig[]>(getListIngestionConfigsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListIngestionConfigsQueryKey = () => {
+  return [`/api/admin/ingestion-configs`] as const;
+};
+
+export const getListIngestionConfigsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listIngestionConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listIngestionConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListIngestionConfigsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listIngestionConfigs>>
+  > = ({ signal }) => listIngestionConfigs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listIngestionConfigs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListIngestionConfigsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listIngestionConfigs>>
+>;
+export type ListIngestionConfigsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List ingestion configurations
+ */
+
+export function useListIngestionConfigs<
+  TData = Awaited<ReturnType<typeof listIngestionConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listIngestionConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListIngestionConfigsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new ingestion config
+ */
+export const getCreateIngestionConfigUrl = () => {
+  return `/api/admin/ingestion-configs`;
+};
+
+export const createIngestionConfig = async (
+  createIngestionConfigBody: CreateIngestionConfigBody,
+  options?: RequestInit,
+): Promise<IngestionConfig> => {
+  return customFetch<IngestionConfig>(getCreateIngestionConfigUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createIngestionConfigBody),
+  });
+};
+
+export const getCreateIngestionConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createIngestionConfig>>,
+    TError,
+    { data: BodyType<CreateIngestionConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createIngestionConfig>>,
+  TError,
+  { data: BodyType<CreateIngestionConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["createIngestionConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createIngestionConfig>>,
+    { data: BodyType<CreateIngestionConfigBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createIngestionConfig(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateIngestionConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createIngestionConfig>>
+>;
+export type CreateIngestionConfigMutationBody =
+  BodyType<CreateIngestionConfigBody>;
+export type CreateIngestionConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new ingestion config
+ */
+export const useCreateIngestionConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createIngestionConfig>>,
+    TError,
+    { data: BodyType<CreateIngestionConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createIngestionConfig>>,
+  TError,
+  { data: BodyType<CreateIngestionConfigBody> },
+  TContext
+> => {
+  return useMutation(getCreateIngestionConfigMutationOptions(options));
+};
+
+/**
+ * @summary Update an ingestion config
+ */
+export const getUpdateIngestionConfigUrl = (id: number) => {
+  return `/api/admin/ingestion-configs/${id}`;
+};
+
+export const updateIngestionConfig = async (
+  id: number,
+  updateIngestionConfigBody: UpdateIngestionConfigBody,
+  options?: RequestInit,
+): Promise<IngestionConfig> => {
+  return customFetch<IngestionConfig>(getUpdateIngestionConfigUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateIngestionConfigBody),
+  });
+};
+
+export const getUpdateIngestionConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateIngestionConfig>>,
+    TError,
+    { id: number; data: BodyType<UpdateIngestionConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateIngestionConfig>>,
+  TError,
+  { id: number; data: BodyType<UpdateIngestionConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["updateIngestionConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateIngestionConfig>>,
+    { id: number; data: BodyType<UpdateIngestionConfigBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateIngestionConfig(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateIngestionConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateIngestionConfig>>
+>;
+export type UpdateIngestionConfigMutationBody =
+  BodyType<UpdateIngestionConfigBody>;
+export type UpdateIngestionConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update an ingestion config
+ */
+export const useUpdateIngestionConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateIngestionConfig>>,
+    TError,
+    { id: number; data: BodyType<UpdateIngestionConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateIngestionConfig>>,
+  TError,
+  { id: number; data: BodyType<UpdateIngestionConfigBody> },
+  TContext
+> => {
+  return useMutation(getUpdateIngestionConfigMutationOptions(options));
+};
+
+/**
+ * @summary Delete an ingestion config
+ */
+export const getDeleteIngestionConfigUrl = (id: number) => {
+  return `/api/admin/ingestion-configs/${id}`;
+};
+
+export const deleteIngestionConfig = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteIngestionConfigUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteIngestionConfigMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteIngestionConfig>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteIngestionConfig>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteIngestionConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteIngestionConfig>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteIngestionConfig(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteIngestionConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteIngestionConfig>>
+>;
+
+export type DeleteIngestionConfigMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an ingestion config
+ */
+export const useDeleteIngestionConfig = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteIngestionConfig>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteIngestionConfig>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteIngestionConfigMutationOptions(options));
+};

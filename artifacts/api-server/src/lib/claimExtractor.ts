@@ -1,0 +1,73 @@
+import { openai } from "@workspace/integrations-openai-ai-server";
+import { logger } from "./logger";
+
+export interface ExtractedClaim {
+  claimText: string;
+  direction: "protective" | "harmful" | "neutral" | "mixed";
+  effectSize: number | null;
+  effectSizeUnit: string | null;
+  ciLower: number | null;
+  ciUpper: number | null;
+  population: string;
+  conditions: string | null;
+  methodologyType: string;
+  evidenceQuality: "A" | "B" | "C" | "D";
+}
+
+const SYSTEM_PROMPT = `You are a scientific claim extractor. Given the abstract of a scientific paper, extract the key empirical claims as structured JSON.
+
+For each claim:
+- claimText: concise statement of the finding (max 150 chars)
+- direction: "protective" (reduces harm/risk), "harmful" (increases harm/risk), "neutral" (no significant effect), or "mixed"
+- effectSize: numeric effect size if reported (OR, RR, HR, Cohen's d, etc.) — null if not available
+- effectSizeUnit: label for the effect size (e.g. "OR", "RR", "HR", "Cohen's d", "mean difference") — null if not available
+- ciLower: lower bound of 95% CI — null if not available
+- ciUpper: upper bound of 95% CI — null if not available
+- population: brief description of study population (max 80 chars)
+- conditions: key conditions or caveats (max 100 chars) — null if none
+- methodologyType: one of "rct", "meta-analysis", "cohort", "case-control", "cross-sectional", "observational", "review", "case-report"
+- evidenceQuality: "A" (systematic review/RCT), "B" (cohort/well-designed), "C" (observational/case-control), "D" (case report/expert opinion)
+
+Return a JSON object: { "claims": [...] }. Extract 1–5 most important claims. Only include claims with direct empirical support from the paper.`;
+
+export async function extractClaims(abstract: string, model: string = "gpt-5-mini"): Promise<ExtractedClaim[]> {
+  const response = await openai.chat.completions.create({
+    model,
+    max_completion_tokens: 2000,
+    temperature: 0,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: `Extract claims from this abstract:\n\n${abstract}` },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const content = response.choices[0]?.message?.content ?? "{}";
+
+  try {
+    const parsed = JSON.parse(content) as { claims?: unknown[] };
+    const claims = parsed.claims;
+    if (!Array.isArray(claims)) {
+      logger.warn({ content }, "LLM returned no claims array");
+      return [];
+    }
+    return claims
+      .filter((c): c is ExtractedClaim => isValidClaim(c))
+      .slice(0, 5);
+  } catch (err) {
+    logger.error({ err, content }, "Failed to parse LLM claim extraction response");
+    return [];
+  }
+}
+
+function isValidClaim(c: unknown): c is ExtractedClaim {
+  if (typeof c !== "object" || c === null) return false;
+  const obj = c as Record<string, unknown>;
+  return (
+    typeof obj.claimText === "string" && obj.claimText.length > 10 &&
+    ["protective", "harmful", "neutral", "mixed"].includes(obj.direction as string) &&
+    typeof obj.population === "string" && obj.population.length > 0 &&
+    typeof obj.methodologyType === "string" &&
+    ["A", "B", "C", "D"].includes(obj.evidenceQuality as string)
+  );
+}

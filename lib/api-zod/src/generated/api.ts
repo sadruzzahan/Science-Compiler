@@ -863,3 +863,103 @@ export const GetRecentActivityResponse = zod.object({
     ),
   }),
 });
+
+/**
+ * @summary List recent ingestion runs
+ */
+export const ListIngestionRunsQueryParams = zod.object({
+  limit: zod.coerce.number().nullish(),
+});
+
+export const ListIngestionRunsResponseItem = zod.object({
+  id: zod.number(),
+  topicId: zod.number().nullish(),
+  topicName: zod.string().nullish(),
+  status: zod.string(),
+  triggeredBy: zod.string(),
+  papersFound: zod.number(),
+  papersProcessed: zod.number(),
+  claimsExtracted: zod.number(),
+  errorsCount: zod.number(),
+  errorDetails: zod.string().nullish(),
+  startedAt: zod.string(),
+  completedAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListIngestionRunsResponse = zod.array(
+  ListIngestionRunsResponseItem,
+);
+
+/**
+ * @summary Trigger an immediate ingestion run
+ */
+export const TriggerIngestionBody = zod.object({
+  topicId: zod.number().nullish(),
+});
+
+export const TriggerIngestionResponse = zod.object({
+  message: zod.string(),
+  topicId: zod.number().nullish(),
+});
+
+/**
+ * @summary List ingestion configurations
+ */
+export const ListIngestionConfigsResponseItem = zod.object({
+  id: zod.number(),
+  topicId: zod.number(),
+  topicName: zod.string().nullish(),
+  pubmedQuery: zod.string(),
+  maxPapersPerRun: zod.number(),
+  enabled: zod.number(),
+  llmModel: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListIngestionConfigsResponse = zod.array(
+  ListIngestionConfigsResponseItem,
+);
+
+/**
+ * @summary Create a new ingestion config
+ */
+export const CreateIngestionConfigBody = zod.object({
+  topicId: zod.number(),
+  pubmedQuery: zod.string(),
+  maxPapersPerRun: zod.number().nullish(),
+  enabled: zod.number().nullish(),
+  llmModel: zod.string().nullish(),
+});
+
+/**
+ * @summary Update an ingestion config
+ */
+export const UpdateIngestionConfigParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateIngestionConfigBody = zod.object({
+  pubmedQuery: zod.string().nullish(),
+  maxPapersPerRun: zod.number().nullish(),
+  enabled: zod.number().nullish(),
+  llmModel: zod.string().nullish(),
+});
+
+export const UpdateIngestionConfigResponse = zod.object({
+  id: zod.number(),
+  topicId: zod.number(),
+  topicName: zod.string().nullish(),
+  pubmedQuery: zod.string(),
+  maxPapersPerRun: zod.number(),
+  enabled: zod.number(),
+  llmModel: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete an ingestion config
+ */
+export const DeleteIngestionConfigParams = zod.object({
+  id: zod.coerce.number(),
+});

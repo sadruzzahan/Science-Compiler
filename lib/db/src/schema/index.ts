@@ -4,3 +4,5 @@ export * from "./claims";
 export * from "./studies";
 export * from "./evidence_links";
 export * from "./claim_synthesis";
+export * from "./ingestion_runs";
+export * from "./ingestion_configs";

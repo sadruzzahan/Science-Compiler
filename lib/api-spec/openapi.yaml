@@ -24,6 +24,8 @@ tags:
     description: Claim synthesis operations
   - name: query
     description: Query operations
+  - name: admin
+    description: Admin and ingestion operations
 paths:
   /healthz:
     get:
@@ -617,6 +619,121 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecentActivity"
+
+  /admin/ingestion-runs:
+    get:
+      operationId: listIngestionRuns
+      tags: [admin]
+      summary: List recent ingestion runs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of ingestion runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngestionRun"
+
+  /admin/ingestion/run:
+    post:
+      operationId: triggerIngestion
+      tags: [admin]
+      summary: Trigger an immediate ingestion run
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerIngestionBody"
+      responses:
+        "200":
+          description: Ingestion started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerIngestionResponse"
+        "409":
+          description: Ingestion already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/ingestion-configs:
+    get:
+      operationId: listIngestionConfigs
+      tags: [admin]
+      summary: List ingestion configurations
+      responses:
+        "200":
+          description: List of ingestion configs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngestionConfig"
+    post:
+      operationId: createIngestionConfig
+      tags: [admin]
+      summary: Create a new ingestion config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIngestionConfigBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionConfig"
+
+  /admin/ingestion-configs/{id}:
+    patch:
+      operationId: updateIngestionConfig
+      tags: [admin]
+      summary: Update an ingestion config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIngestionConfigBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionConfig"
+    delete:
+      operationId: deleteIngestionConfig
+      tags: [admin]
+      summary: Delete an ingestion config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
 components:
   schemas:
@@ -1516,3 +1633,99 @@ components:
         - recentClaims
         - recentPapers
         - stats
+
+    IngestionRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: ["integer", "null"]
+        topicName:
+          type: ["string", "null"]
+        status:
+          type: string
+        triggeredBy:
+          type: string
+        papersFound:
+          type: integer
+        papersProcessed:
+          type: integer
+        claimsExtracted:
+          type: integer
+        errorsCount:
+          type: integer
+        errorDetails:
+          type: ["string", "null"]
+        startedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, status, triggeredBy, papersFound, papersProcessed, claimsExtracted, errorsCount, startedAt, createdAt]
+
+    IngestionConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        topicName:
+          type: ["string", "null"]
+        pubmedQuery:
+          type: string
+        maxPapersPerRun:
+          type: integer
+        enabled:
+          type: integer
+        llmModel:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, topicId, pubmedQuery, maxPapersPerRun, enabled, llmModel, createdAt, updatedAt]
+
+    CreateIngestionConfigBody:
+      type: object
+      properties:
+        topicId:
+          type: integer
+        pubmedQuery:
+          type: string
+        maxPapersPerRun:
+          type: ["integer", "null"]
+        enabled:
+          type: ["integer", "null"]
+        llmModel:
+          type: ["string", "null"]
+      required: [topicId, pubmedQuery]
+
+    UpdateIngestionConfigBody:
+      type: object
+      properties:
+        pubmedQuery:
+          type: ["string", "null"]
+        maxPapersPerRun:
+          type: ["integer", "null"]
+        enabled:
+          type: ["integer", "null"]
+        llmModel:
+          type: ["string", "null"]
+
+    TriggerIngestionBody:
+      type: object
+      properties:
+        topicId:
+          type: ["integer", "null"]
+
+    TriggerIngestionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        topicId:
+          type: ["integer", "null"]
+      required: [message]

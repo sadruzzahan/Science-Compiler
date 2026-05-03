@@ -11,6 +11,7 @@ import PapersPage from "@/pages/papers";
 import PaperDetailPage from "@/pages/papers/detail";
 import ClaimsPage from "@/pages/claims";
 import ClaimDetailPage from "@/pages/claims/detail";
+import AdminIngestionPage from "@/pages/admin/ingestion";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ function Router() {
         <Route path="/papers/:id" component={PaperDetailPage} />
         <Route path="/claims" component={ClaimsPage} />
         <Route path="/claims/:id" component={ClaimDetailPage} />
+        <Route path="/admin/ingestion" component={AdminIngestionPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

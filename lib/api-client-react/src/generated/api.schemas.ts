@@ -501,6 +501,72 @@ export interface RecentActivity {
   stats: TopicsStats;
 }
 
+export interface IngestionRun {
+  id: number;
+  /** @nullable */
+  topicId?: number | null;
+  /** @nullable */
+  topicName?: string | null;
+  status: string;
+  triggeredBy: string;
+  papersFound: number;
+  papersProcessed: number;
+  claimsExtracted: number;
+  errorsCount: number;
+  /** @nullable */
+  errorDetails?: string | null;
+  startedAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface IngestionConfig {
+  id: number;
+  topicId: number;
+  /** @nullable */
+  topicName?: string | null;
+  pubmedQuery: string;
+  maxPapersPerRun: number;
+  enabled: number;
+  llmModel: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateIngestionConfigBody {
+  topicId: number;
+  pubmedQuery: string;
+  /** @nullable */
+  maxPapersPerRun?: number | null;
+  /** @nullable */
+  enabled?: number | null;
+  /** @nullable */
+  llmModel?: string | null;
+}
+
+export interface UpdateIngestionConfigBody {
+  /** @nullable */
+  pubmedQuery?: string | null;
+  /** @nullable */
+  maxPapersPerRun?: number | null;
+  /** @nullable */
+  enabled?: number | null;
+  /** @nullable */
+  llmModel?: string | null;
+}
+
+export interface TriggerIngestionBody {
+  /** @nullable */
+  topicId?: number | null;
+}
+
+export interface TriggerIngestionResponse {
+  message: string;
+  /** @nullable */
+  topicId?: number | null;
+}
+
 export type ListEvidenceLinksParams = {
   /**
    * @nullable
@@ -593,4 +659,11 @@ export type ListClaimsParams = {
 
 export type QueryKnowledgeBaseParams = {
   q: string;
+};
+
+export type ListIngestionRunsParams = {
+  /**
+   * @nullable
+   */
+  limit?: number | null;
 };
