@@ -3,6 +3,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { searchPubMed, fetchPubMedPapers } from "./pubmed";
 import { extractClaims } from "./claimExtractor";
 import { linkEvidence, refreshClaimSynthesis } from "./evidenceLinker";
+import { embedAndStoreClaim } from "./embeddings";
 import { logger } from "./logger";
 
 async function getBatchProcess() {
@@ -158,6 +159,10 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
                 nReplications: 0,
               }).returning();
 
+              // Fire-and-forget: embedding generation is best-effort and
+              // logs its own failures. Awaiting would serialize ingestion
+              // behind OpenAI latency.
+              void embedAndStoreClaim(insertedClaim.id, claim.claimText);
               await linkEvidence(insertedClaim.id, claim, config.topicId, insertedPaper.id);
               await refreshClaimSynthesis(insertedClaim.id, config.topicId);
               result.claimsExtracted++;

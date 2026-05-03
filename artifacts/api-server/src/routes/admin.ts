@@ -3,6 +3,7 @@ import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
 import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable, papersTable, claimsTable } from "@workspace/db";
 import { runIngestion } from "../lib/ingestionWorker";
 import { acquireIngestionLock, releaseIngestionLock } from "../lib/ingestionScheduler";
+import { backfillClaimEmbeddings, isEmbeddingsAvailable } from "../lib/embeddings";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
@@ -183,6 +184,18 @@ router.delete("/admin/ingestion-configs/:id", async (req, res): Promise<void> =>
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(ingestionConfigsTable).where(eq(ingestionConfigsTable.id, id));
   res.status(204).end();
+});
+
+router.post("/admin/embeddings/backfill", async (req, res): Promise<void> => {
+  if (!isEmbeddingsAvailable()) {
+    res.status(503).json({ error: "OPENAI_API_KEY not configured; embeddings disabled" });
+    return;
+  }
+  const limitRaw = parseInt(String(req.query.limit ?? req.body?.limit ?? "200"));
+  const limit = isNaN(limitRaw) ? 200 : Math.max(1, Math.min(limitRaw, 1000));
+  const result = await backfillClaimEmbeddings(limit);
+  logger.info({ result }, "Claim embedding backfill completed");
+  res.json(result);
 });
 
 export default router;

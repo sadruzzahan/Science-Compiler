@@ -11,6 +11,7 @@ import {
   GetClaimSynthesisResponse,
 } from "@workspace/api-zod";
 import { requireUser } from "../middlewares/auth";
+import { embedAndStoreClaim } from "../lib/embeddings";
 
 const router: IRouter = Router();
 
@@ -185,7 +186,8 @@ router.post("/claims", requireUser, async (req, res): Promise<void> => {
   const body = CreateClaimBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [claim] = await db.insert(claimsTable).values(stripClaim(body.data) as ClaimInsert).returning();
-  res.status(201).json({ ...claim, createdAt: claim!.createdAt.toISOString(), updatedAt: claim!.updatedAt.toISOString() });
+  void embedAndStoreClaim(claim.id, claim.claimText);
+  res.status(201).json({ ...claim, embedding: undefined, createdAt: claim!.createdAt.toISOString(), updatedAt: claim!.updatedAt.toISOString() });
 });
 
 router.patch("/claims/:id", requireUser, async (req, res): Promise<void> => {
@@ -195,7 +197,8 @@ router.patch("/claims/:id", requireUser, async (req, res): Promise<void> => {
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [claim] = await db.update(claimsTable).set(stripClaim(body.data)).where(eq(claimsTable.id, id)).returning();
   if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
-  res.json({ ...claim, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
+  if (body.data.claimText) void embedAndStoreClaim(claim.id, claim.claimText);
+  res.json({ ...claim, embedding: undefined, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
 });
 
 router.delete("/claims/:id", requireUser, async (req, res): Promise<void> => {

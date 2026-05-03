@@ -7,9 +7,13 @@ import {
   claimSynthesisTable,
   questionSynthesisTable,
 } from "@workspace/db";
-import { eq, or, ilike, inArray, sql, and, lt } from "drizzle-orm";
+import { eq, or, ilike, inArray, sql, and, lt, isNotNull } from "drizzle-orm";
 import { createHash } from "crypto";
 import { logger } from "./logger";
+import { embedText, toVectorLiteral } from "./embeddings";
+
+const VECTOR_TOP_K = 20;
+const VECTOR_MAX_DISTANCE = 0.6;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -211,7 +215,89 @@ export function computeTemporalTrend(evidence: EvidenceItem[]): string {
   return "stable";
 }
 
-export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
+function sampleSizeSubquery() {
+  return db
+    .select({
+      paperId: studiesTable.paperId,
+      maxSampleSize: sql<number>`MAX(${studiesTable.sampleSize})`.as("max_sample_size"),
+    })
+    .from(studiesTable)
+    .groupBy(studiesTable.paperId)
+    .as("sample_sizes");
+}
+
+interface EvidenceRow {
+  claimId: number;
+  claimText: string;
+  direction: string;
+  methodologyType: string;
+  evidenceQuality: string;
+  population: string;
+  effectSize: number | null;
+  effectSizeUnit: string | null;
+  paperTitle: string | null;
+  paperAuthors: string | null;
+  paperYear: number | null;
+  sampleSize: number | null;
+}
+
+function toEvidenceItem(r: EvidenceRow): EvidenceItem {
+  return {
+    claimId: r.claimId,
+    claimText: r.claimText,
+    direction: r.direction,
+    methodologyType: r.methodologyType,
+    evidenceQuality: r.evidenceQuality,
+    population: r.population,
+    effectSize: r.effectSize,
+    effectSizeUnit: r.effectSizeUnit,
+    sampleSize: r.sampleSize ?? null,
+    paperTitle: r.paperTitle ?? "Unknown",
+    paperAuthors: r.paperAuthors ?? "Unknown",
+    paperYear: r.paperYear ?? 0,
+  };
+}
+
+async function retrieveByVector(question: string): Promise<EvidenceItem[] | null> {
+  const queryVec = await embedText(question);
+  if (!queryVec) return null;
+  const literal = toVectorLiteral(queryVec);
+  const sampleSubq = sampleSizeSubquery();
+
+  try {
+    const rows = await db
+      .select({
+        claimId: claimsTable.id,
+        claimText: claimsTable.claimText,
+        direction: claimsTable.direction,
+        methodologyType: claimsTable.methodologyType,
+        evidenceQuality: claimsTable.evidenceQuality,
+        population: claimsTable.population,
+        effectSize: claimsTable.effectSize,
+        effectSizeUnit: claimsTable.effectSizeUnit,
+        paperTitle: papersTable.title,
+        paperAuthors: papersTable.authors,
+        paperYear: papersTable.publicationYear,
+        sampleSize: sampleSubq.maxSampleSize,
+        distance: sql<number>`${claimsTable.embedding} <=> ${literal}::vector`.as("distance"),
+      })
+      .from(claimsTable)
+      .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
+      .leftJoin(sampleSubq, eq(sampleSubq.paperId, claimsTable.paperId))
+      .where(isNotNull(claimsTable.embedding))
+      .orderBy(sql`${claimsTable.embedding} <=> ${literal}::vector`)
+      .limit(VECTOR_TOP_K);
+
+    const filtered = rows.filter((r) => r.distance <= VECTOR_MAX_DISTANCE);
+    if (filtered.length === 0) return null;
+    return filtered.map(toEvidenceItem);
+  } catch (err) {
+    logger.warn({ err }, "Vector retrieval failed; falling back to keyword search");
+    return null;
+  }
+}
+
+async function retrieveByKeywords(question: string): Promise<EvidenceItem[]> {
   const terms = normalizeQuestion(question)
     .split(" ")
     .filter((t) => t.length > 3)
@@ -228,14 +314,7 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     ];
   });
 
-  const sampleSubq = db
-    .select({
-      paperId: studiesTable.paperId,
-      maxSampleSize: sql<number>`MAX(${studiesTable.sampleSize})`.as("max_sample_size"),
-    })
-    .from(studiesTable)
-    .groupBy(studiesTable.paperId)
-    .as("sample_sizes");
+  const sampleSubq = sampleSizeSubquery();
 
   let scoreExpr = sql<number>`0`;
   for (const term of terms) {
@@ -266,22 +345,20 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     .leftJoin(sampleSubq, eq(sampleSubq.paperId, claimsTable.paperId))
     .where(or(...termConditions))
     .orderBy(sql`(${scoreExpr}) DESC`, claimsTable.id)
-    .limit(20);
+    .limit(VECTOR_TOP_K);
 
-  return rows.map((r) => ({
-    claimId: r.claimId,
-    claimText: r.claimText,
-    direction: r.direction,
-    methodologyType: r.methodologyType,
-    evidenceQuality: r.evidenceQuality,
-    population: r.population,
-    effectSize: r.effectSize,
-    effectSizeUnit: r.effectSizeUnit,
-    sampleSize: r.sampleSize ?? null,
-    paperTitle: r.paperTitle ?? "Unknown",
-    paperAuthors: r.paperAuthors ?? "Unknown",
-    paperYear: r.paperYear ?? 0,
-  }));
+  return rows.map(toEvidenceItem);
+}
+
+export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
+  const vectorResults = await retrieveByVector(question);
+  if (vectorResults && vectorResults.length > 0) {
+    logger.debug({ count: vectorResults.length }, "Retrieved evidence via vector search");
+    return vectorResults;
+  }
+  const keywordResults = await retrieveByKeywords(question);
+  logger.debug({ count: keywordResults.length }, "Retrieved evidence via keyword fallback");
+  return keywordResults;
 }
 
 const SYNTHESIS_SYSTEM_PROMPT = `You are a scientific evidence synthesizer. Given a research question and indexed evidence items, produce a structured synthesis as JSON.

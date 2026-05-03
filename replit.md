@@ -15,7 +15,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod, `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
-- **AI**: OpenAI via Replit AI Integration (`@workspace/integrations-openai-ai-server`)
+- **AI**: OpenAI via Replit AI Integration (`@workspace/integrations-openai-ai-server`) for chat. Embeddings via direct `openai` SDK with `OPENAI_API_KEY` (Replit's proxy does not support embeddings).
+- **Vector search**: pgvector (HNSW cosine) on `claims.embedding` (1536-d, `text-embedding-3-small`)
 
 ## Key Commands
 
