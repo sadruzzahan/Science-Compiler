@@ -15,6 +15,13 @@
       "when": 1777771726543,
       "tag": "0001_absent_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777772000844,
+      "tag": "0002_regular_chamber",
+      "breakpoints": true
     }
   ]
 }

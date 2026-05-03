@@ -11,12 +11,10 @@ import {
   cacheSynthesis,
 } from "../lib/synthesisEngine";
 import { requireUser } from "../middlewares/auth";
-import { getAuth } from "@clerk/express";
-import { usersTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
-router.get("/query/recent", async (_req, res): Promise<void> => {
+router.get("/query/recent", requireUser, async (_req, res): Promise<void> => {
   const recentClaimsRaw = await db
     .select({
       id: claimsTable.id,
@@ -104,7 +102,7 @@ router.get("/query/recent", async (_req, res): Promise<void> => {
   res.json(GetRecentActivityResponse.parse({ recentClaims, recentPapers, stats }));
 });
 
-router.get("/query", async (req, res): Promise<void> => {
+router.get("/query", requireUser, async (req, res): Promise<void> => {
   const queryParams = QueryKnowledgeBaseQueryParams.safeParse(req.query);
   if (!queryParams.success) {
     res.status(400).json({ error: queryParams.error.message });
@@ -278,22 +276,10 @@ router.get("/query", async (req, res): Promise<void> => {
   res.json(QueryKnowledgeBaseResponse.parse({ query: q, matchedClaim, relatedClaims, noResults: false }));
 });
 
-router.get("/query/synthesize", async (req, res): Promise<void> => {
+router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => {
   // SSE endpoint: frontend uses fetch+ReadableStream (not EventSource) so
-  // session cookies are sent automatically by the browser. Clerk middleware
-  // (mounted in app.ts) populates the auth context.
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    res.setHeader("WWW-Authenticate", 'Bearer realm="api", error="invalid_token"');
-    res.status(401).json({ code: "UNAUTHENTICATED", error: "Authentication required" });
-    return;
-  }
-  const [u] = await db.select().from(usersTable).where(eq(usersTable.clerkId, auth.userId)).limit(1);
-  if (u && u.status === "suspended") {
-    res.status(403).json({ error: "Account suspended" });
-    return;
-  }
-
+  // session cookies are sent automatically by the browser. requireUser
+  // middleware enforces the same auth contract as other protected routes.
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (!q) {
     res.status(400).json({ error: "q query parameter is required" });

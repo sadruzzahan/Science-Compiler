@@ -17,6 +17,18 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _onAuthError: ((status: 401 | 403, error: ApiError) => void) | null = null;
+
+/**
+ * Register a global handler invoked whenever a request fails with 401 or 403.
+ * Useful for wiring app-wide "session expired" or "forbidden" toasts.
+ * Pass `null` to clear.
+ */
+export function setAuthErrorHandler(
+  handler: ((status: 401 | 403, error: ApiError) => void) | null,
+): void {
+  _onAuthError = handler;
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -364,7 +376,15 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+    const err = new ApiError(response, errorData, requestInfo);
+    if ((response.status === 401 || response.status === 403) && _onAuthError) {
+      try {
+        _onAuthError(response.status as 401 | 403, err);
+      } catch {
+        // Never let handler errors swallow the original error.
+      }
+    }
+    throw err;
   }
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
