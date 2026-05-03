@@ -418,7 +418,7 @@ export default function QueryPage() {
     "SSRIs effectiveness for depression",
   ];
 
-  const isActive = !!submittedQuery;
+  const isActive = !!submittedQuery || !!sharedId;
   const isStreaming = phase === "streaming";
   const isDone = phase === "done";
   const isError = phase === "error";

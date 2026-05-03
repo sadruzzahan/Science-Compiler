@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, useSearch } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, useAuth, useClerk } from "@clerk/react";
 import { shadcn } from "@clerk/themes";
@@ -61,6 +61,21 @@ function ClerkBridge() {
   return null;
 }
 
+// Renders the QueryPage publicly when viewing a shared synthesis link
+// (`?synthesis=<id>`); otherwise requires sign-in. The endpoint backing
+// shared links is intentionally public, so recipients must be able to
+// open them while signed out.
+function QueryRoute() {
+  const search = useSearch();
+  const hasShare = new URLSearchParams(search).has("synthesis");
+  if (hasShare) return <QueryPage />;
+  return (
+    <RequireAuth>
+      <QueryPage />
+    </RequireAuth>
+  );
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -69,16 +84,8 @@ function AppRoutes() {
       <Route>
         <AppLayout>
           <Switch>
-            <Route path="/">
-              <RequireAuth>
-                <QueryPage />
-              </RequireAuth>
-            </Route>
-            <Route path="/query">
-              <RequireAuth>
-                <QueryPage />
-              </RequireAuth>
-            </Route>
+            <Route path="/" component={QueryRoute} />
+            <Route path="/query" component={QueryRoute} />
             <Route path="/topics" component={TopicsPage} />
             <Route path="/topics/:id" component={TopicDetailPage} />
             <Route path="/papers" component={PapersPage} />
