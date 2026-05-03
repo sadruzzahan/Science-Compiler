@@ -690,6 +690,65 @@ export interface ContradictionEntry {
   contradictionExplanation: string;
 }
 
+export interface BudgetStatus {
+  exhausted: boolean;
+  spendUsd: number;
+  /** @nullable */
+  capUsd?: number | null;
+  retryAfterUtc: string;
+  retryAfterSeconds: number;
+}
+
+export type UsageMeResponseSyntheses = {
+  todayCount: number;
+  /** @nullable */
+  dailyLimit?: number | null;
+  /** @nullable */
+  remaining?: number | null;
+  resetAtUtc: string;
+};
+
+export interface UsageMeResponse {
+  plan: string;
+  syntheses: UsageMeResponseSyntheses;
+  budget: BudgetStatus;
+}
+
+export interface AdminUsageDay {
+  day: string;
+  costUsd: number;
+  calls: number;
+}
+
+export interface AdminUsageRoute {
+  route: string;
+  costUsd: number;
+  calls: number;
+}
+
+export interface AdminUsageUser {
+  /** @nullable */
+  userId?: string | null;
+  costUsd: number;
+  calls: number;
+}
+
+export interface AdminUsageSummary {
+  todayUsd: number;
+  todayCount: number;
+  /** @nullable */
+  capUsd?: number | null;
+  exhausted: boolean;
+  byDay: AdminUsageDay[];
+  byRoute: AdminUsageRoute[];
+  byUser: AdminUsageUser[];
+}
+
+export interface ResetBudgetResponse {
+  ok: boolean;
+  budget: BudgetStatus;
+}
+
 export interface ContradictionMapResult {
   claimId: number;
   claimText: string;

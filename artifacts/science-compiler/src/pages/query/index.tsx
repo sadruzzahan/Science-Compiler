@@ -108,7 +108,21 @@ function useSynthesis(question: string | null): {
           { signal: controller.signal, headers: { Accept: "text/event-stream" } },
         );
 
-        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok || !resp.body) {
+          // Surface structured 429/503 errors (rate limit, quota, budget cap)
+          // with a human-readable message so the UI can render guidance.
+          let message = `HTTP ${resp.status}`;
+          try {
+            const body = (await resp.json()) as { code?: string; message?: string; retryAfter?: number };
+            if (body?.message) {
+              const retry = body.retryAfter ? ` (retry in ~${body.retryAfter}s)` : "";
+              message = `${body.message}${retry}`;
+            }
+          } catch {
+            /* ignore parse failures */
+          }
+          throw new Error(message);
+        }
 
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();

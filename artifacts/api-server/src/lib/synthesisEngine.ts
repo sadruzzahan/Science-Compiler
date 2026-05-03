@@ -12,6 +12,7 @@ import { createHash } from "crypto";
 import { customAlphabet } from "nanoid";
 import { logger } from "./logger";
 import { embedText, toVectorLiteral } from "./embeddings";
+import { recordLlmCall } from "./usage";
 
 // URL-safe, unambiguous alphabet (no 0/O/1/l/I); 8 chars => ~47 bits entropy.
 const generateShareId = customAlphabet(
@@ -319,8 +320,13 @@ function toEvidenceItem(r: EvidenceRow): EvidenceItem {
   };
 }
 
-async function retrieveByVector(question: string): Promise<EvidenceItem[] | null> {
-  const queryVec = await embedText(question);
+async function retrieveByVector(
+  question: string,
+  recordCtx?: { userId?: string | null; requestId?: string | null; route?: string },
+): Promise<EvidenceItem[] | null> {
+  // Pass user/request context so retrieval embeddings count against the
+  // calling user's daily quota and show up in /admin/usage attribution.
+  const queryVec = await embedText(question, recordCtx);
   if (!queryVec) return null;
   const literal = toVectorLiteral(queryVec);
   const sampleSubq = sampleSizeSubquery();
@@ -430,9 +436,12 @@ async function retrieveByKeywords(
  *  - If the embedding call fails (no key, network error, etc.), fall back
  *    to a single unrestricted keyword search over all claims.
  */
-export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
+export async function retrieveRelevantEvidence(
+  question: string,
+  recordCtx?: { userId?: string | null; requestId?: string | null; route?: string },
+): Promise<EvidenceItem[]> {
   const [vectorResults, keywordForUnembedded] = await Promise.all([
-    retrieveByVector(question),
+    retrieveByVector(question, recordCtx),
     retrieveByKeywords(question, { onlyMissingEmbedding: true }),
   ]);
 
@@ -490,6 +499,7 @@ export async function synthesizeQuestion(
   question: string,
   evidence: EvidenceItem[],
   onToken: (token: string) => void,
+  recordCtx?: { userId?: string | null; requestId?: string | null },
 ): Promise<SynthesisResult> {
   const openai = await getOpenAI();
 
@@ -500,29 +510,58 @@ export async function synthesizeQuestion(
     )
     .join("\n");
 
-  const stream = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: SYNTHESIS_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Question: "${question}"\n\nEvidence items (0-indexed):\n${contextLines}\n\nReturn JSON synthesis.`,
-      },
-    ],
-    response_format: { type: "json_object" },
-    stream: true,
-    temperature: 0.2,
-    max_completion_tokens: 1500,
-  });
+  const SYNTH_MODEL = "gpt-4o-mini";
+  // Rough char-based token estimate so streamed calls (which don't expose a
+  // `usage` block) still record realistic spend in usage_events.
+  const promptText =
+    `${SYNTHESIS_SYSTEM_PROMPT}\nQuestion: "${question}"\n\nEvidence items (0-indexed):\n${contextLines}`;
+  const estimatedInputTokens = Math.max(1, Math.ceil(promptText.length / 4));
 
+  // Single chokepoint: wrap BOTH the create() and the stream consumption in
+  // recordLlmCall so failures during stream creation/iteration still write a
+  // usage_events row (best-effort, with failed=true) — matching every other
+  // OpenAI call in this codebase.
   let fullContent = "";
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content ?? "";
-    if (delta) {
-      fullContent += delta;
-      onToken(delta);
-    }
-  }
+  await recordLlmCall(
+    async () => {
+      const stream = await openai.chat.completions.create({
+        model: SYNTH_MODEL,
+        messages: [
+          { role: "system", content: SYNTHESIS_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Question: "${question}"\n\nEvidence items (0-indexed):\n${contextLines}\n\nReturn JSON synthesis.`,
+          },
+        ],
+        response_format: { type: "json_object" },
+        stream: true,
+        temperature: 0.2,
+        max_completion_tokens: 1500,
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? "";
+        if (delta) {
+          fullContent += delta;
+          onToken(delta);
+        }
+      }
+      // Returning a synthetic `usage` block lets recordLlmCall compute cost
+      // without a separate code path.
+      return {
+        usage: {
+          input_tokens: estimatedInputTokens,
+          output_tokens: Math.max(1, Math.ceil(fullContent.length / 4)),
+        },
+      };
+    },
+    {
+      route: "synthesisEngine.synthesizeQuestion",
+      model: SYNTH_MODEL,
+      userId: recordCtx?.userId ?? null,
+      requestId: recordCtx?.requestId ?? null,
+    },
+  );
 
   let parsed: Record<string, unknown> = {};
   try {
@@ -585,8 +624,17 @@ export async function synthesizeQuestion(
   };
 }
 
-export async function verifyClaimText(claimText: string): Promise<VerifyResult> {
-  const evidence = await retrieveRelevantEvidence(claimText);
+export async function verifyClaimText(
+  claimText: string,
+  recordCtx?: { userId?: string | null; requestId?: string | null },
+): Promise<VerifyResult> {
+  // Forward user attribution so the embedding fired during verify counts
+  // against the caller's daily quota (otherwise verify could be used to
+  // bypass the synthesis quota cap).
+  const evidence = await retrieveRelevantEvidence(claimText, {
+    ...recordCtx,
+    route: "synthesisEngine.verifyClaimText",
+  });
 
   if (evidence.length === 0) {
     return {
@@ -678,23 +726,28 @@ export async function generateContradictionExplanation(
   claimPopulation: string,
 ): Promise<string> {
   const openai = await getOpenAI();
+  const CONTRADICTION_MODEL = "gpt-4o-mini";
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: CONTRADICTION_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Claim: "${claimText}" (population: "${claimPopulation}")
+  const response = await recordLlmCall(
+    () =>
+      openai.chat.completions.create({
+        model: CONTRADICTION_MODEL,
+        messages: [
+          { role: "system", content: CONTRADICTION_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Claim: "${claimText}" (population: "${claimPopulation}")
 Contradicting study: "${studyTitle}" — method: ${studyMethodology}, population: "${studyPopulation}"
 
 Why do they contradict each other? Return JSON.`,
-      },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    max_completion_tokens: 200,
-  });
+          },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_completion_tokens: 200,
+      }),
+    { route: "synthesisEngine.generateContradictionExplanation", model: CONTRADICTION_MODEL },
+  );
 
   const content = response.choices[0]?.message?.content ?? "{}";
   try {

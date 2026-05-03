@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { recordLlmCall } from "./usage";
 
 async function getOpenAI() {
   const { openai } = await import("@workspace/integrations-openai-ai-server");
@@ -47,16 +48,20 @@ export async function extractClaims(paperText: PaperText | string, model: string
     : buildInputText(paperText);
 
   const openai = await getOpenAI();
-  const response = await openai.chat.completions.create({
-    model,
-    max_completion_tokens: 2000,
-    temperature: 0,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Extract claims from this paper text:\n\n${text}` },
-    ],
-    response_format: { type: "json_object" },
-  });
+  const response = await recordLlmCall(
+    () =>
+      openai.chat.completions.create({
+        model,
+        max_completion_tokens: 2000,
+        temperature: 0,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Extract claims from this paper text:\n\n${text}` },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    { route: "claimExtractor.extractClaims", model },
+  );
 
   const content = response.choices[0]?.message?.content ?? "{}";
 

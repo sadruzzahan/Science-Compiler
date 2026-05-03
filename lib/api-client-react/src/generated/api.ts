@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminUsageSummary,
   Claim,
   ClaimDetail,
   ClaimSynthesis,
@@ -45,6 +46,7 @@ import type {
   QueryKnowledgeBaseParams,
   QueryResult,
   RecentActivity,
+  ResetBudgetResponse,
   Study,
   SynthesisResult,
   SynthesizeQuestionParams,
@@ -59,6 +61,7 @@ import type {
   UpdatePaperBody,
   UpdateStudyBody,
   UpdateTopicBody,
+  UsageMeResponse,
   VerifyClaimBody,
   VerifyResult,
 } from "./api.schemas";
@@ -3437,6 +3440,237 @@ export const useDeleteIngestionConfig = <
   TContext
 > => {
   return useMutation(getDeleteIngestionConfigMutationOptions(options));
+};
+
+/**
+ * @summary Get current user's usage, quota, and global budget status
+ */
+export const getGetUsageMeUrl = () => {
+  return `/api/usage/me`;
+};
+
+export const getUsageMe = async (
+  options?: RequestInit,
+): Promise<UsageMeResponse> => {
+  return customFetch<UsageMeResponse>(getGetUsageMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUsageMeQueryKey = () => {
+  return [`/api/usage/me`] as const;
+};
+
+export const getGetUsageMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUsageMe>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUsageMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUsageMeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsageMe>>> = ({
+    signal,
+  }) => getUsageMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUsageMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUsageMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUsageMe>>
+>;
+export type GetUsageMeQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get current user's usage, quota, and global budget status
+ */
+
+export function useGetUsageMe<
+  TData = Awaited<ReturnType<typeof getUsageMe>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUsageMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUsageMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Aggregate usage metrics for admins
+ */
+export const getGetAdminUsageUrl = () => {
+  return `/api/admin/usage`;
+};
+
+export const getAdminUsage = async (
+  options?: RequestInit,
+): Promise<AdminUsageSummary> => {
+  return customFetch<AdminUsageSummary>(getGetAdminUsageUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminUsageQueryKey = () => {
+  return [`/api/admin/usage`] as const;
+};
+
+export const getGetAdminUsageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminUsageQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminUsage>>> = ({
+    signal,
+  }) => getAdminUsage({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminUsage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminUsageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminUsage>>
+>;
+export type GetAdminUsageQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Aggregate usage metrics for admins
+ */
+
+export function useGetAdminUsage<
+  TData = Awaited<ReturnType<typeof getAdminUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminUsageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin override — reset today's LLM spend cap
+ */
+export const getResetUsageBudgetUrl = () => {
+  return `/api/admin/usage/reset-budget`;
+};
+
+export const resetUsageBudget = async (
+  options?: RequestInit,
+): Promise<ResetBudgetResponse> => {
+  return customFetch<ResetBudgetResponse>(getResetUsageBudgetUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResetUsageBudgetMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetUsageBudget>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetUsageBudget>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["resetUsageBudget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetUsageBudget>>,
+    void
+  > = () => {
+    return resetUsageBudget(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetUsageBudgetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetUsageBudget>>
+>;
+
+export type ResetUsageBudgetMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin override — reset today's LLM spend cap
+ */
+export const useResetUsageBudget = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetUsageBudget>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetUsageBudget>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getResetUsageBudgetMutationOptions(options));
 };
 
 /**

@@ -26,6 +26,8 @@ tags:
     description: Query operations
   - name: admin
     description: Admin and ingestion operations
+  - name: usage
+    description: Usage, quotas, and LLM budget
 paths:
   /healthz:
     get:
@@ -875,6 +877,63 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /usage/me:
+    get:
+      operationId: getUsageMe
+      tags: [usage]
+      summary: Get current user's usage, quota, and global budget status
+      responses:
+        "200":
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageMeResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/usage:
+    get:
+      operationId: getAdminUsage
+      tags: [admin]
+      summary: Aggregate usage metrics for admins
+      responses:
+        "200":
+          description: Aggregate usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsageSummary"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/usage/reset-budget:
+    post:
+      operationId: resetUsageBudget
+      tags: [admin]
+      summary: Admin override — reset today's LLM spend cap
+      responses:
+        "200":
+          description: Reset acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetBudgetResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /users/me:
     get:
@@ -2081,6 +2140,82 @@ components:
         - studyAuthors
         - studyMethodologyType
         - contradictionExplanation
+
+    BudgetStatus:
+      type: object
+      properties:
+        exhausted: { type: boolean }
+        spendUsd: { type: number }
+        capUsd: { type: ["number", "null"] }
+        retryAfterUtc: { type: string }
+        retryAfterSeconds: { type: integer }
+      required: [exhausted, spendUsd, retryAfterUtc, retryAfterSeconds]
+
+    UsageMeResponse:
+      type: object
+      properties:
+        plan: { type: string }
+        syntheses:
+          type: object
+          properties:
+            todayCount: { type: integer }
+            dailyLimit: { type: ["integer", "null"] }
+            remaining: { type: ["integer", "null"] }
+            resetAtUtc: { type: string }
+          required: [todayCount, resetAtUtc]
+        budget:
+          $ref: "#/components/schemas/BudgetStatus"
+      required: [plan, syntheses, budget]
+
+    AdminUsageDay:
+      type: object
+      properties:
+        day: { type: string }
+        costUsd: { type: number }
+        calls: { type: integer }
+      required: [day, costUsd, calls]
+
+    AdminUsageRoute:
+      type: object
+      properties:
+        route: { type: string }
+        costUsd: { type: number }
+        calls: { type: integer }
+      required: [route, costUsd, calls]
+
+    AdminUsageUser:
+      type: object
+      properties:
+        userId: { type: ["string", "null"] }
+        costUsd: { type: number }
+        calls: { type: integer }
+      required: [costUsd, calls]
+
+    AdminUsageSummary:
+      type: object
+      properties:
+        todayUsd: { type: number }
+        todayCount: { type: integer }
+        capUsd: { type: ["number", "null"] }
+        exhausted: { type: boolean }
+        byDay:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUsageDay" }
+        byRoute:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUsageRoute" }
+        byUser:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUsageUser" }
+      required: [todayUsd, todayCount, exhausted, byDay, byRoute, byUser]
+
+    ResetBudgetResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        budget:
+          $ref: "#/components/schemas/BudgetStatus"
+      required: [ok, budget]
 
     ContradictionMapResult:
       type: object

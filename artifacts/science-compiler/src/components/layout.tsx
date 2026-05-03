@@ -3,6 +3,7 @@ import { BookOpen, FileText, FlaskConical, LayoutDashboard, Search, Settings } f
 import { Show } from "@clerk/react";
 import { cn } from "@/lib/utils";
 import { UserMenu } from "@/components/user-menu";
+import { BudgetBanner } from "@/components/usage-status";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 interface LayoutProps {
@@ -101,6 +102,7 @@ export function AppLayout({ children }: LayoutProps) {
         <header className="h-14 border-b bg-background/80 backdrop-blur flex items-center justify-end px-6 flex-shrink-0">
           <UserMenu />
         </header>
+        <BudgetBanner />
         <div className="flex-1 overflow-y-auto">
           {children}
         </div>

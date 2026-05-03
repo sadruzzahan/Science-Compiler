@@ -6,6 +6,9 @@ import { acquireIngestionLock, releaseIngestionLock } from "../lib/ingestionSche
 import { backfillClaimEmbeddings, isEmbeddingsAvailable } from "../lib/embeddings";
 import { logger } from "../lib/logger";
 import { z } from "zod";
+import { ingestionRateLimit } from "../lib/rateLimits";
+
+const MAX_INGESTION_QUERY_LEN = 200;
 
 const router: IRouter = Router();
 
@@ -113,7 +116,7 @@ router.get("/admin/ingestion-runs/:id/results", async (req, res): Promise<void> 
   });
 });
 
-router.post("/admin/ingestion/run", async (req, res): Promise<void> => {
+router.post("/admin/ingestion/run", ingestionRateLimit, async (req, res): Promise<void> => {
   if (!acquireIngestionLock()) {
     res.status(409).json({ error: "Ingestion is already running" });
     return;
@@ -133,16 +136,19 @@ router.post("/admin/ingestion/run", async (req, res): Promise<void> => {
   res.json({ message: "Ingestion started", topicId: topicId ?? null });
 });
 
+// Per Task #11: ingestion search query is capped at 200 chars (tighter than
+// the 500-char general request cap because PubMed query strings beyond that
+// length are almost always misuse).
 const CreateConfigBody = z.object({
   topicId: z.number().int().positive(),
-  pubmedQuery: z.string().min(3).max(500),
+  pubmedQuery: z.string().min(3).max(MAX_INGESTION_QUERY_LEN),
   maxPapersPerRun: z.number().int().min(1).max(50).optional().default(10),
   enabled: z.number().int().min(0).max(1).optional().default(1),
   llmModel: z.string().optional().default("gpt-5-mini"),
 });
 
 const UpdateConfigBody = z.object({
-  pubmedQuery: z.string().min(3).max(500).optional(),
+  pubmedQuery: z.string().min(3).max(MAX_INGESTION_QUERY_LEN).optional(),
   maxPapersPerRun: z.number().int().min(1).max(50).optional(),
   enabled: z.number().int().min(0).max(1).optional(),
   llmModel: z.string().optional(),

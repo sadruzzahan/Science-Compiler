@@ -1123,6 +1123,71 @@ export const DeleteIngestionConfigParams = zod.object({
 });
 
 /**
+ * @summary Get current user's usage, quota, and global budget status
+ */
+export const GetUsageMeResponse = zod.object({
+  plan: zod.string(),
+  syntheses: zod.object({
+    todayCount: zod.number(),
+    dailyLimit: zod.number().nullish(),
+    remaining: zod.number().nullish(),
+    resetAtUtc: zod.string(),
+  }),
+  budget: zod.object({
+    exhausted: zod.boolean(),
+    spendUsd: zod.number(),
+    capUsd: zod.number().nullish(),
+    retryAfterUtc: zod.string(),
+    retryAfterSeconds: zod.number(),
+  }),
+});
+
+/**
+ * @summary Aggregate usage metrics for admins
+ */
+export const GetAdminUsageResponse = zod.object({
+  todayUsd: zod.number(),
+  todayCount: zod.number(),
+  capUsd: zod.number().nullish(),
+  exhausted: zod.boolean(),
+  byDay: zod.array(
+    zod.object({
+      day: zod.string(),
+      costUsd: zod.number(),
+      calls: zod.number(),
+    }),
+  ),
+  byRoute: zod.array(
+    zod.object({
+      route: zod.string(),
+      costUsd: zod.number(),
+      calls: zod.number(),
+    }),
+  ),
+  byUser: zod.array(
+    zod.object({
+      userId: zod.string().nullish(),
+      costUsd: zod.number(),
+      calls: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin override — reset today's LLM spend cap
+ */
+export const ResetUsageBudgetResponse = zod.object({
+  ok: zod.boolean(),
+  budget: zod.object({
+    exhausted: zod.boolean(),
+    spendUsd: zod.number(),
+    capUsd: zod.number().nullish(),
+    retryAfterUtc: zod.string(),
+    retryAfterSeconds: zod.number(),
+  }),
+});
+
+/**
  * @summary Get current authenticated user
  */
 export const GetCurrentUserResponse = zod.object({

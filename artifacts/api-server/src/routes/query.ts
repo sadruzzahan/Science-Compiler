@@ -14,6 +14,16 @@ import {
   type SynthesisResult,
 } from "../lib/synthesisEngine";
 import { requireUser } from "../middlewares/auth";
+import { synthesisRateLimit } from "../lib/rateLimits";
+import {
+  enforceSynthesisQuota,
+  preflightBudgetForSse,
+  enforceBudget,
+} from "../lib/usage";
+import { tryAcquireStream, releaseStream, getSseCap } from "../lib/sseCap";
+
+const MAX_QUERY_LEN = 500;
+const MAX_CLAIM_LEN = 500;
 
 const router: IRouter = Router();
 
@@ -113,6 +123,10 @@ router.get("/query", requireUser, async (req, res): Promise<void> => {
   }
 
   const { q } = queryParams.data;
+  if (q.length > MAX_QUERY_LEN) {
+    res.status(400).json({ code: "INPUT_TOO_LARGE", message: `q must be <= ${MAX_QUERY_LEN} characters` });
+    return;
+  }
   const searchTerms = q.toLowerCase().split(/\s+/).filter(t => t.length > 2);
 
   if (searchTerms.length === 0) {
@@ -279,77 +293,122 @@ router.get("/query", requireUser, async (req, res): Promise<void> => {
   res.json(QueryKnowledgeBaseResponse.parse({ query: q, matchedClaim, relatedClaims, noResults: false }));
 });
 
-router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => {
-  // SSE endpoint: frontend uses fetch+ReadableStream (not EventSource) so
-  // session cookies are sent automatically by the browser. requireUser
-  // middleware enforces the same auth contract as other protected routes.
-  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-  if (!q) {
-    res.status(400).json({ error: "q query parameter is required" });
-    return;
-  }
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  const writeEvent = (type: string, data: unknown) => {
-    res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
-  };
-
-  let closed = false;
-  req.on("close", () => { closed = true; });
-
-  try {
-    const cached = await getCachedSynthesis(q);
-    if (cached) {
-      writeEvent("cached", cached);
-      res.end();
+router.get(
+  "/query/synthesize",
+  requireUser,
+  synthesisRateLimit,
+  enforceSynthesisQuota,
+  async (req, res): Promise<void> => {
+    // SSE endpoint: frontend uses fetch+ReadableStream (not EventSource) so
+    // session cookies are sent automatically by the browser. requireUser
+    // middleware enforces the same auth contract as other protected routes.
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (!q) {
+      res.status(400).json({ error: "q query parameter is required" });
+      return;
+    }
+    if (q.length > MAX_QUERY_LEN) {
+      res.status(400).json({ code: "INPUT_TOO_LARGE", message: `q must be <= ${MAX_QUERY_LEN} characters` });
       return;
     }
 
-    const evidence = await retrieveRelevantEvidence(q);
+    // Hard global LLM-spend cap. Must be checked BEFORE any SSE headers so
+    // the client receives a clean 503 JSON body.
+    if (!(await preflightBudgetForSse(req, res))) return;
 
-    if (evidence.length === 0) {
-      const empty: SynthesisResult = {
-        question: q,
-        questionHash: questionHash(q),
-        consensusStatus: "insufficient",
-        synthesisText: "No relevant evidence found in the knowledge base for this question.",
-        moderatingVariables: [],
-        methodologicalConcerns: [],
-        uncertaintyScore: 100,
-        temporalTrend: "unclear",
-        supportingStudies: [],
-        contradictingStudies: [],
-        totalEvidence: 0,
-        cached: false,
-      };
-      // Cache + assign a shareId so even "no evidence" answers are shareable.
-      await cacheSynthesis(empty);
-      writeEvent("result", empty);
-      res.end();
+    const userId = req.currentUser!.id;
+    if (!tryAcquireStream(userId)) {
+      res.setHeader("Retry-After", "5");
+      res.status(429).json({
+        code: "TOO_MANY_STREAMS",
+        message: `You have too many concurrent synthesis streams open (max ${getSseCap()}).`,
+        retryAfter: 5,
+      });
       return;
     }
 
-    const result = await synthesizeQuestion(q, evidence, (token) => {
-      if (!closed) writeEvent("token", token);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const writeEvent = (type: string, data: unknown) => {
+      res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+    };
+
+    let closed = false;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      releaseStream(userId);
+    };
+    req.on("close", () => {
+      closed = true;
+      release();
     });
 
-    // Await so the persisted shareId is attached to `result` before we emit it.
-    await cacheSynthesis(result);
-    writeEvent("result", result);
-    res.end();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!closed) {
-      writeEvent("error", msg);
+    try {
+      const cached = await getCachedSynthesis(q);
+      if (cached) {
+        writeEvent("cached", cached);
+        res.end();
+        return;
+      }
+
+      const evidence = await retrieveRelevantEvidence(q, {
+        userId,
+        requestId: req.id ? String(req.id) : null,
+        route: "synthesisEngine.retrieveRelevantEvidence",
+      });
+
+      if (evidence.length === 0) {
+        const empty: SynthesisResult = {
+          question: q,
+          questionHash: questionHash(q),
+          consensusStatus: "insufficient",
+          synthesisText: "No relevant evidence found in the knowledge base for this question.",
+          moderatingVariables: [],
+          methodologicalConcerns: [],
+          uncertaintyScore: 100,
+          temporalTrend: "unclear",
+          supportingStudies: [],
+          contradictingStudies: [],
+          totalEvidence: 0,
+          cached: false,
+        };
+        // Cache + assign a shareId so even "no evidence" answers are shareable.
+        await cacheSynthesis(empty);
+        writeEvent("result", empty);
+        res.end();
+        return;
+      }
+
+      const result = await synthesizeQuestion(
+        q,
+        evidence,
+        (token) => {
+          if (!closed) writeEvent("token", token);
+        },
+        { userId, requestId: req.id ? String(req.id) : null },
+      );
+
+      // Await so the persisted shareId is attached to `result` before we emit it.
+      await cacheSynthesis(result);
+      writeEvent("result", result);
       res.end();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!closed) {
+        writeEvent("error", msg);
+        res.end();
+      }
+    } finally {
+      release();
     }
-  }
-});
+  },
+);
 
 // Public — anyone with the link can view a stored synthesis (that's the
 // whole point of "shareable"). Auth is intentionally NOT required.
@@ -371,20 +430,34 @@ router.get("/synthesis/:shareId", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/query/verify", requireUser, async (req, res): Promise<void> => {
-  const claim = typeof req.body?.claim === "string" ? req.body.claim.trim() : "";
-  if (!claim) {
-    res.status(400).json({ error: "claim is required" });
-    return;
-  }
-  try {
-    const result = await verifyClaimText(claim);
-    res.json(result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
-  }
-});
+router.post(
+  "/query/verify",
+  requireUser,
+  synthesisRateLimit,
+  enforceBudget,
+  enforceSynthesisQuota,
+  async (req, res): Promise<void> => {
+    const claim = typeof req.body?.claim === "string" ? req.body.claim.trim() : "";
+    if (!claim) {
+      res.status(400).json({ error: "claim is required" });
+      return;
+    }
+    if (claim.length > MAX_CLAIM_LEN) {
+      res.status(400).json({ code: "INPUT_TOO_LARGE", message: `claim must be <= ${MAX_CLAIM_LEN} characters` });
+      return;
+    }
+    try {
+      const result = await verifyClaimText(claim, {
+        userId: req.currentUser!.id,
+        requestId: req.id ? String(req.id) : null,
+      });
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
+  },
+);
 
 router.get("/claims/:id/contradictions", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);

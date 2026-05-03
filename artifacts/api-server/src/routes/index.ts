@@ -8,12 +8,21 @@ import evidenceLinksRouter from "./evidence_links";
 import queryRouter from "./query";
 import adminRouter from "./admin";
 import usersRouter from "./users";
+import usageRouter from "./usage";
 import { requireAdmin, requirePublicReadOrUser } from "../middlewares/auth";
+import { generalRateLimit, authRateLimit } from "../lib/rateLimits";
 
 const router: IRouter = Router();
 
+// Apply the per-IP / per-user general rate limit to ALL /api/* requests.
+// Tighter per-route limits are applied inside the specific routers below.
+router.use(generalRateLimit);
+
 router.use(healthRouter);
-router.use(usersRouter);
+// Auth-related endpoints use a slightly tighter limiter to discourage
+// account-enumeration / session-spam style probes.
+router.use(authRateLimit, usersRouter);
+router.use(usageRouter);
 
 // Admin routes: gated solely by requireAdmin so anonymous/non-admin callers
 // always get 403 FORBIDDEN regardless of PUBLIC_READ_ENABLED.

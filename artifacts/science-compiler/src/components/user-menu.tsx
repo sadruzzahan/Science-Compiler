@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { QuotaChip } from "@/components/usage-status";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -33,6 +34,8 @@ export function UserMenu() {
         </div>
       </Show>
       <Show when="signed-in">
+        <div className="flex items-center gap-2">
+        <QuotaChip />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2 max-w-[180px]" data-testid="button-user-menu">
@@ -68,6 +71,7 @@ export function UserMenu() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </Show>
     </>
   );

@@ -2,6 +2,10 @@ import OpenAI from "openai";
 import { db, claimsTable } from "@workspace/db";
 import { eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { recordLlmCall, type RecordLlmCallContext } from "./usage";
+
+/** Subset of the recordLlmCall context that callers may forward. */
+export type EmbedRecordCtx = Partial<Pick<RecordLlmCallContext, "userId" | "requestId" | "route">>;
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 export const EMBEDDING_DIMENSIONS = 1536;
@@ -25,16 +29,25 @@ export function isEmbeddingsAvailable(): boolean {
  * Returns null if OPENAI_API_KEY is missing or the API call fails.
  * Callers should fall back to keyword search when null is returned.
  */
-export async function embedText(text: string): Promise<number[] | null> {
+export async function embedText(text: string, ctx?: EmbedRecordCtx): Promise<number[] | null> {
   const client = getClient();
   if (!client) return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
   try {
-    const response = await client.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: trimmed.slice(0, 8000),
-    });
+    const response = await recordLlmCall(
+      () =>
+        client.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: trimmed.slice(0, 8000),
+        }),
+      {
+        route: ctx?.route ?? "embeddings.embedText",
+        model: EMBEDDING_MODEL,
+        userId: ctx?.userId ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    );
     const vec = response.data[0]?.embedding;
     if (!vec || vec.length !== EMBEDDING_DIMENSIONS) {
       logger.warn({ len: vec?.length }, "Unexpected embedding dimension");
