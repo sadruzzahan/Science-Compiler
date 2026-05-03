@@ -83,12 +83,14 @@ describe("retrieveRelevantEvidence (hybrid)", () => {
     vi.clearAllMocks();
   });
 
+  // NOTE: vector and keyword-unembedded queries now run via Promise.all.
+  // retrieveByVector awaits embedText() first, so the keyword query's
+  // db.select() runs synchronously *first* and consumes queue[0].
+
   it("merges vector hits with keyword hits for unembedded claims", async () => {
     mockEmbedText.mockResolvedValueOnce(new Array(1536).fill(0.01));
-    // 1st db.select call -> vector query
+    dbResultQueue.push([keywordRow(3)]); // keyword-unembedded fires first
     dbResultQueue.push([vectorRow(1), vectorRow(2)]);
-    // 2nd db.select call -> keyword (onlyMissingEmbedding) query
-    dbResultQueue.push([keywordRow(3)]);
 
     const out = await retrieveRelevantEvidence("does coffee improve focus");
     expect(out.map((e) => e.claimId).sort()).toEqual([1, 2, 3]);
@@ -96,8 +98,8 @@ describe("retrieveRelevantEvidence (hybrid)", () => {
 
   it("dedupes claims that appear in both result sets, vector wins", async () => {
     mockEmbedText.mockResolvedValueOnce(new Array(1536).fill(0.01));
-    dbResultQueue.push([vectorRow(1)]);
     dbResultQueue.push([keywordRow(1), keywordRow(4)]);
+    dbResultQueue.push([vectorRow(1)]);
 
     const out = await retrieveRelevantEvidence("topic question");
     const ids = out.map((e) => e.claimId);
@@ -110,8 +112,10 @@ describe("retrieveRelevantEvidence (hybrid)", () => {
 
   it("falls back to unrestricted keyword search when embedding generation fails", async () => {
     mockEmbedText.mockResolvedValueOnce(null);
-    // Only the keyword fallback query runs
-    dbResultQueue.push([keywordRow(7), keywordRow(8)]);
+    // Promise.all still fires both — keyword-unembedded runs synchronously,
+    // then the unrestricted keyword fallback runs after vector returns null.
+    dbResultQueue.push([]); // keyword-unembedded (parallel) — no result
+    dbResultQueue.push([keywordRow(7), keywordRow(8)]); // full keyword fallback
 
     const out = await retrieveRelevantEvidence("topic question");
     expect(out.map((e) => e.claimId)).toEqual([7, 8]);
@@ -119,8 +123,8 @@ describe("retrieveRelevantEvidence (hybrid)", () => {
 
   it("still returns keyword-unembedded results when vector search returns 0 in-threshold rows", async () => {
     mockEmbedText.mockResolvedValueOnce(new Array(1536).fill(0.01));
+    dbResultQueue.push([keywordRow(11)]); // keyword-unembedded
     dbResultQueue.push([]); // vector returned nothing within threshold
-    dbResultQueue.push([keywordRow(11)]); // unembedded keyword still finds something
 
     const out = await retrieveRelevantEvidence("rare topic");
     expect(out.map((e) => e.claimId)).toEqual([11]);

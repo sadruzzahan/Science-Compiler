@@ -362,15 +362,18 @@ async function retrieveByKeywords(
  * Hybrid retrieval:
  *  - Run cosine-similarity vector search over claims that already have an
  *    embedding.
- *  - In parallel, run keyword (ilike) search restricted to claims that do
- *    NOT yet have an embedding, so backfill-in-progress data is still
+ *  - Concurrently run a keyword (ilike) search restricted to claims that
+ *    do NOT yet have an embedding, so backfill-in-progress data is still
  *    discoverable.
- *  - Merge & dedupe by claimId, then cap at VECTOR_TOP_K.
+ *  - Merge & dedupe by claimId (vector wins), then cap at VECTOR_TOP_K.
  *  - If the embedding call fails (no key, network error, etc.), fall back
  *    to a single unrestricted keyword search over all claims.
  */
 export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
-  const vectorResults = await retrieveByVector(question);
+  const [vectorResults, keywordForUnembedded] = await Promise.all([
+    retrieveByVector(question),
+    retrieveByKeywords(question, { onlyMissingEmbedding: true }),
+  ]);
 
   if (vectorResults === null) {
     const keywordResults = await retrieveByKeywords(question);
@@ -380,10 +383,6 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     );
     return keywordResults;
   }
-
-  const keywordForUnembedded = await retrieveByKeywords(question, {
-    onlyMissingEmbedding: true,
-  });
 
   const seen = new Set<number>();
   const merged: EvidenceItem[] = [];
