@@ -186,6 +186,17 @@ export async function cacheSynthesis(result: SynthesisResult): Promise<string | 
       .returning({ shareId: questionSynthesisTable.shareId });
 
     const finalShareId = row?.shareId ?? newShareId;
+    // If the upsert hit an existing row, the DB column kept its original
+    // shareId but the result JSON we just wrote contains `newShareId`.
+    // Realign the JSON blob so column and payload always agree on disk.
+    if (finalShareId !== newShareId) {
+      const realigned = { ...toStore, shareId: finalShareId };
+      await db
+        .update(questionSynthesisTable)
+        .set({ result: realigned })
+        .where(eq(questionSynthesisTable.questionHash, result.questionHash));
+      toStore.shareId = finalShareId;
+    }
     result.shareId = finalShareId;
     toStore.shareId = finalShareId;
     memoryCache.set(result.questionHash, { result: toStore, expiresAt: expiresAtMs });
