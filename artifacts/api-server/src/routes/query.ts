@@ -359,7 +359,7 @@ router.get("/synthesis/:shareId", async (req, res): Promise<void> => {
   }
   const result = await getSynthesisByShareId(raw);
   if (!result) {
-    res.status(404).json({ error: "Synthesis not found or expired" });
+    res.status(404).json({ error: "Synthesis not found" });
     return;
   }
   res.json(result);

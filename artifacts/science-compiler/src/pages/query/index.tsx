@@ -687,7 +687,7 @@ export default function QueryPage() {
                 </div>
               )}
 
-              <VerifySection />
+              {!sharedId && <VerifySection />}
             </>
           )}
         </div>
