@@ -351,8 +351,10 @@ router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => 
 // whole point of "shareable"). Auth is intentionally NOT required.
 router.get("/synthesis/:shareId", async (req, res): Promise<void> => {
   const raw = typeof req.params.shareId === "string" ? req.params.shareId : "";
-  // Restrict to the nanoid alphabet we generate; rejects path traversal,
-  // SQLi probes, and anything that's clearly not one of our slugs.
+  // Accept a deliberate alphanumeric superset of our 8-char nanoid alphabet
+  // so legacy (10-hex backfilled) IDs and any future alphabet tweaks remain
+  // valid; rejects path traversal, SQLi probes, and anything obviously
+  // not one of our slugs.
   if (!/^[A-Za-z0-9]{4,32}$/.test(raw)) {
     res.status(400).json({ error: "Invalid share id" });
     return;
