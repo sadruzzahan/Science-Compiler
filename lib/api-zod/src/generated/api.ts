@@ -865,6 +865,47 @@ export const GetRecentActivityResponse = zod.object({
 });
 
 /**
+ * @summary Verify a plain-text claim against the knowledge base
+ */
+export const VerifyClaimBody = zod.object({
+  claim: zod.string(),
+});
+
+export const VerifyClaimResponse = zod.object({
+  claim: zod.string(),
+  verdict: zod.string(),
+  confidence: zod.number(),
+  matchedClaimText: zod.string().nullish(),
+  matchedClaimId: zod.number().nullish(),
+  supportingSummary: zod.string(),
+  contradictingSummary: zod.string(),
+});
+
+/**
+ * @summary Get the contradiction map for a claim with LLM-generated explanations
+ */
+export const GetClaimContradictionsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetClaimContradictionsResponse = zod.object({
+  claimId: zod.number(),
+  claimText: zod.string(),
+  contradictions: zod.array(
+    zod.object({
+      evidenceLinkId: zod.number(),
+      studyId: zod.number(),
+      studyTitle: zod.string(),
+      studyYear: zod.number(),
+      studyAuthors: zod.string(),
+      studyMethodologyType: zod.string(),
+      studySampleSize: zod.number().nullish(),
+      contradictionExplanation: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary List recent ingestion runs
  */
 export const ListIngestionRunsQueryParams = zod.object({

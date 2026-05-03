@@ -21,6 +21,7 @@ import type {
   ClaimDetail,
   ClaimSynthesis,
   ClaimsListResponse,
+  ContradictionMapResult,
   CreateClaimBody,
   CreateEvidenceLinkBody,
   CreateIngestionConfigBody,
@@ -54,6 +55,8 @@ import type {
   UpdatePaperBody,
   UpdateStudyBody,
   UpdateTopicBody,
+  VerifyClaimBody,
+  VerifyResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -2450,6 +2453,180 @@ export function useGetRecentActivity<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecentActivityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Verify a plain-text claim against the knowledge base
+ */
+export const getVerifyClaimUrl = () => {
+  return `/api/query/verify`;
+};
+
+export const verifyClaim = async (
+  verifyClaimBody: VerifyClaimBody,
+  options?: RequestInit,
+): Promise<VerifyResult> => {
+  return customFetch<VerifyResult>(getVerifyClaimUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyClaimBody),
+  });
+};
+
+export const getVerifyClaimMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyClaim>>,
+    TError,
+    { data: BodyType<VerifyClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyClaim>>,
+  TError,
+  { data: BodyType<VerifyClaimBody> },
+  TContext
+> => {
+  const mutationKey = ["verifyClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyClaim>>,
+    { data: BodyType<VerifyClaimBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifyClaim(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyClaim>>
+>;
+export type VerifyClaimMutationBody = BodyType<VerifyClaimBody>;
+export type VerifyClaimMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Verify a plain-text claim against the knowledge base
+ */
+export const useVerifyClaim = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyClaim>>,
+    TError,
+    { data: BodyType<VerifyClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyClaim>>,
+  TError,
+  { data: BodyType<VerifyClaimBody> },
+  TContext
+> => {
+  return useMutation(getVerifyClaimMutationOptions(options));
+};
+
+/**
+ * @summary Get the contradiction map for a claim with LLM-generated explanations
+ */
+export const getGetClaimContradictionsUrl = (id: number) => {
+  return `/api/claims/${id}/contradictions`;
+};
+
+export const getClaimContradictions = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ContradictionMapResult> => {
+  return customFetch<ContradictionMapResult>(getGetClaimContradictionsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetClaimContradictionsQueryKey = (id: number) => {
+  return [`/api/claims/${id}/contradictions`] as const;
+};
+
+export const getGetClaimContradictionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getClaimContradictions>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getClaimContradictions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetClaimContradictionsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getClaimContradictions>>
+  > = ({ signal }) => getClaimContradictions(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getClaimContradictions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetClaimContradictionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getClaimContradictions>>
+>;
+export type GetClaimContradictionsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the contradiction map for a claim with LLM-generated explanations
+ */
+
+export function useGetClaimContradictions<
+  TData = Awaited<ReturnType<typeof getClaimContradictions>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getClaimContradictions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetClaimContradictionsQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

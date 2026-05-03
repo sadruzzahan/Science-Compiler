@@ -567,6 +567,40 @@ export interface TriggerIngestionResponse {
   topicId?: number | null;
 }
 
+export interface VerifyClaimBody {
+  claim: string;
+}
+
+export interface VerifyResult {
+  claim: string;
+  verdict: string;
+  confidence: number;
+  /** @nullable */
+  matchedClaimText?: string | null;
+  /** @nullable */
+  matchedClaimId?: number | null;
+  supportingSummary: string;
+  contradictingSummary: string;
+}
+
+export interface ContradictionEntry {
+  evidenceLinkId: number;
+  studyId: number;
+  studyTitle: string;
+  studyYear: number;
+  studyAuthors: string;
+  studyMethodologyType: string;
+  /** @nullable */
+  studySampleSize?: number | null;
+  contradictionExplanation: string;
+}
+
+export interface ContradictionMapResult {
+  claimId: number;
+  claimText: string;
+  contradictions: ContradictionEntry[];
+}
+
 export type ListEvidenceLinksParams = {
   /**
    * @nullable

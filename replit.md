@@ -46,14 +46,30 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - Admin API: GET/POST `/admin/ingestion-configs`, PATCH/DELETE `/admin/ingestion-configs/:id`, POST `/admin/ingestion/run`, GET `/admin/ingestion-runs`
 - Admin UI: `/admin/ingestion` page with config CRUD, run history, and "Run Now" button
 
+### AI Synthesis & Query Engine (Task #3)
+- `lib/synthesisEngine.ts` — core synthesis library:
+  - `retrieveRelevantEvidence(question)` — full-text search on claims + papers (ilike)
+  - `synthesizeQuestion(evidence, onToken)` — GPT-4o-mini JSON-mode streaming synthesis
+  - `verifyClaimText(claim)` — non-streaming LLM claim verification
+  - `buildContradictionMap(claimId)` — lazy LLM explanation of contradicting evidence pairs
+  - `getCachedSynthesis` / `cacheSynthesis` — 24-hour in-memory cache keyed by question hash
+- New API routes in `routes/query.ts`:
+  - `GET /api/query/synthesize?q=...` — SSE streaming endpoint (token-by-token + final result event)
+  - `POST /api/query/verify {claim}` — returns verdict/confidence/evidence summaries
+  - `GET /api/claims/:id/contradictions` — contradiction map with lazy LLM explanations
+- OpenAPI spec: added `VerifyClaimBody`, `VerifyResult`, `ContradictionEntry`, `ContradictionMapResult` schemas; `POST /query/verify` and `GET /claims/{id}/contradictions` endpoints
+- Generated hooks: `useVerifyClaim`, `useGetClaimContradictions`
+- Frontend `pages/query/index.tsx`: replaced keyword-match with SSE streaming synthesis UI — real-time token display, structured result panels (consensus status, uncertainty score, temporal trend, moderating variables, methodological concerns, supporting/contradicting evidence lists), plus inline verify-claim sub-flow
+- Frontend `pages/claims/detail.tsx`: added "Contradiction Map" panel using `useGetClaimContradictions` (lazy-loaded, toggleable, shows LLM-generated explanations per contradicting evidence link)
+
 ## Architecture
 
 ```
 artifacts/
   api-server/          Express 5 API, serves /api/*
     src/
-      routes/          admin.ts, papers.ts, claims.ts, topics.ts, ...
-      lib/             ingestionWorker.ts, ingestionScheduler.ts, pubmed.ts, claimExtractor.ts, evidenceLinker.ts
+      routes/          admin.ts, papers.ts, claims.ts, topics.ts, query.ts
+      lib/             ingestionWorker.ts, ingestionScheduler.ts, pubmed.ts, claimExtractor.ts, evidenceLinker.ts, synthesisEngine.ts
   science-compiler/    React + Vite frontend
     src/
       pages/           query/, topics/, papers/, claims/, admin/

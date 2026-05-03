@@ -2,6 +2,14 @@ import { Router, type IRouter } from "express";
 import { eq, sql, ilike, or } from "drizzle-orm";
 import { db, claimsTable, topicsTable, papersTable, claimSynthesisTable, evidenceLinksTable, studiesTable } from "@workspace/db";
 import { QueryKnowledgeBaseQueryParams, QueryKnowledgeBaseResponse, GetRecentActivityResponse } from "@workspace/api-zod";
+import {
+  retrieveRelevantEvidence,
+  synthesizeQuestion,
+  verifyClaimText,
+  buildContradictionMap,
+  getCachedSynthesis,
+  cacheSynthesis,
+} from "../lib/synthesisEngine";
 
 const router: IRouter = Router();
 
@@ -265,6 +273,106 @@ router.get("/query", async (req, res): Promise<void> => {
     }));
 
   res.json(QueryKnowledgeBaseResponse.parse({ query: q, matchedClaim, relatedClaims, noResults: false }));
+});
+
+router.get("/query/synthesize", async (req, res): Promise<void> => {
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  if (!q) {
+    res.status(400).json({ error: "q query parameter is required" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const writeEvent = (type: string, data: unknown) => {
+    res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+  };
+
+  let closed = false;
+  req.on("close", () => { closed = true; });
+
+  try {
+    const cached = getCachedSynthesis(q);
+    if (cached) {
+      writeEvent("cached", cached);
+      res.end();
+      return;
+    }
+
+    const evidence = await retrieveRelevantEvidence(q);
+
+    if (evidence.length === 0) {
+      const empty = {
+        question: q,
+        questionHash: "",
+        consensusStatus: "insufficient",
+        synthesisText: "No relevant evidence found in the knowledge base for this question.",
+        moderatingVariables: [] as string[],
+        methodologicalConcerns: [] as string[],
+        uncertaintyScore: 100,
+        temporalTrend: "unclear",
+        supportingStudies: [],
+        contradictingStudies: [],
+        totalEvidence: 0,
+        cached: false,
+      };
+      writeEvent("result", empty);
+      res.end();
+      return;
+    }
+
+    const result = await synthesizeQuestion(q, evidence, (token) => {
+      if (!closed) writeEvent("token", token);
+    });
+
+    cacheSynthesis(result);
+    writeEvent("result", result);
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!closed) {
+      writeEvent("error", msg);
+      res.end();
+    }
+  }
+});
+
+router.post("/query/verify", async (req, res): Promise<void> => {
+  const claim = typeof req.body?.claim === "string" ? req.body.claim.trim() : "";
+  if (!claim) {
+    res.status(400).json({ error: "claim is required" });
+    return;
+  }
+  try {
+    const result = await verifyClaimText(claim);
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+router.get("/claims/:id/contradictions", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid claim id" });
+    return;
+  }
+  try {
+    const result = await buildContradictionMap(id);
+    if (!result.claimText) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
 export default router;

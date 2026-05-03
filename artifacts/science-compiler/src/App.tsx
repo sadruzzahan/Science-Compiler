@@ -20,6 +20,7 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={QueryPage} />
+        <Route path="/query" component={QueryPage} />
         <Route path="/topics" component={TopicsPage} />
         <Route path="/topics/:id" component={TopicDetailPage} />
         <Route path="/papers" component={PapersPage} />

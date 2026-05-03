@@ -620,6 +620,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecentActivity"
 
+  /query/verify:
+    post:
+      operationId: verifyClaim
+      tags: [query]
+      summary: Verify a plain-text claim against the knowledge base
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyClaimBody"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /claims/{id}/contradictions:
+    get:
+      operationId: getClaimContradictions
+      tags: [claims]
+      summary: Get the contradiction map for a claim with LLM-generated explanations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contradiction map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContradictionMapResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/ingestion-runs:
     get:
       operationId: listIngestionRuns
@@ -1729,3 +1779,70 @@ components:
         topicId:
           type: ["integer", "null"]
       required: [message]
+
+    VerifyClaimBody:
+      type: object
+      properties:
+        claim:
+          type: string
+      required: [claim]
+
+    VerifyResult:
+      type: object
+      properties:
+        claim:
+          type: string
+        verdict:
+          type: string
+        confidence:
+          type: integer
+        matchedClaimText:
+          type: ["string", "null"]
+        matchedClaimId:
+          type: ["integer", "null"]
+        supportingSummary:
+          type: string
+        contradictingSummary:
+          type: string
+      required: [claim, verdict, confidence, supportingSummary, contradictingSummary]
+
+    ContradictionEntry:
+      type: object
+      properties:
+        evidenceLinkId:
+          type: integer
+        studyId:
+          type: integer
+        studyTitle:
+          type: string
+        studyYear:
+          type: integer
+        studyAuthors:
+          type: string
+        studyMethodologyType:
+          type: string
+        studySampleSize:
+          type: ["integer", "null"]
+        contradictionExplanation:
+          type: string
+      required:
+        - evidenceLinkId
+        - studyId
+        - studyTitle
+        - studyYear
+        - studyAuthors
+        - studyMethodologyType
+        - contradictionExplanation
+
+    ContradictionMapResult:
+      type: object
+      properties:
+        claimId:
+          type: integer
+        claimText:
+          type: string
+        contradictions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContradictionEntry"
+      required: [claimId, claimText, contradictions]
