@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ClaimSummary } from "./claimSummary";
+import type { PaperSourceBadge } from "./paperSourceBadge";
 
 export interface PaperDetail {
   id: number;
@@ -29,6 +30,13 @@ export interface PaperDetail {
   replicationStatus: string;
   /** @nullable */
   openAccessUrl?: string | null;
+  isPreprint?: number;
+  fullTextStatus?: string;
+  /** @nullable */
+  fullTextSource?: string | null;
+  /** @nullable */
+  fullTextUrl?: string | null;
+  sources: PaperSourceBadge[];
   claims: ClaimSummary[];
   createdAt: string;
 }

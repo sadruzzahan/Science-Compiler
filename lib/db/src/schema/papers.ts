@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,6 +19,12 @@ export const papersTable = pgTable("papers", {
   replicationStatus: text("replication_status").notNull().default("unverified"),
   openAccessUrl: text("open_access_url"),
   rawAbstractXml: text("raw_abstract_xml"),
+  isPreprint: integer("is_preprint").notNull().default(0),
+  fullTextStatus: text("full_text_status").notNull().default("unknown"),
+  fullTextSource: text("full_text_source"),
+  fullTextUrl: text("full_text_url"),
+  fullText: text("full_text"),
+  fingerprint: text("fingerprint"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

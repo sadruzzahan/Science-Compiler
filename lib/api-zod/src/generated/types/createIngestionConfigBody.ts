@@ -19,4 +19,6 @@ export interface CreateIngestionConfigBody {
   enabled?: number | null;
   /** @nullable */
   llmModel?: string | null;
+  /** @nullable */
+  sources?: string[] | null;
 }

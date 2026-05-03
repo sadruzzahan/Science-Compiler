@@ -10,6 +10,8 @@ export const ingestionConfigsTable = pgTable("ingestion_configs", {
   maxPapersPerRun: integer("max_papers_per_run").notNull().default(10),
   enabled: integer("enabled").notNull().default(1),
   llmModel: text("llm_model").notNull().default("gpt-5-mini"),
+  // Source adapter ids (e.g. ["pubmed","semanticScholar","openAlex","biorxiv"]).
+  sources: text("sources").array().notNull().default(["pubmed"]),
   createdByUserId: uuid("created_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedByUserId: uuid("updated_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

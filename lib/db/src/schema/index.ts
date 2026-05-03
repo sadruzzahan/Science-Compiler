@@ -10,3 +10,5 @@ export * from "./question_synthesis";
 export * from "./users";
 export * from "./usage_events";
 export * from "./observability";
+export * from "./paper_sources";
+export * from "./claim_reviews";

@@ -410,6 +410,10 @@ export const ListPapersResponse = zod.object({
       evidenceQuality: zod.string(),
       replicationStatus: zod.string(),
       openAccessUrl: zod.string().nullish(),
+      isPreprint: zod.number().optional(),
+      fullTextStatus: zod.string().optional(),
+      fullTextSource: zod.string().nullish(),
+      fullTextUrl: zod.string().nullish(),
       createdAt: zod.string(),
     }),
   ),
@@ -462,6 +466,18 @@ export const GetPaperResponse = zod.object({
   evidenceQuality: zod.string(),
   replicationStatus: zod.string(),
   openAccessUrl: zod.string().nullish(),
+  isPreprint: zod.number().optional(),
+  fullTextStatus: zod.string().optional(),
+  fullTextSource: zod.string().nullish(),
+  fullTextUrl: zod.string().nullish(),
+  sources: zod.array(
+    zod.object({
+      sourceId: zod.string(),
+      displayName: zod.string(),
+      nativeId: zod.string(),
+      url: zod.string().nullish(),
+    }),
+  ),
   claims: zod.array(
     zod.object({
       id: zod.number(),
@@ -517,6 +533,10 @@ export const UpdatePaperResponse = zod.object({
   evidenceQuality: zod.string(),
   replicationStatus: zod.string(),
   openAccessUrl: zod.string().nullish(),
+  isPreprint: zod.number().optional(),
+  fullTextStatus: zod.string().optional(),
+  fullTextSource: zod.string().nullish(),
+  fullTextUrl: zod.string().nullish(),
   createdAt: zod.string(),
 });
 
@@ -728,6 +748,9 @@ export const UpdateClaimResponse = zod.object({
   evidenceQuality: zod.string(),
   replicationStatus: zod.string(),
   nReplications: zod.number(),
+  confidence: zod.number().optional(),
+  status: zod.string().optional(),
+  flagCount: zod.number().optional(),
   createdAt: zod.string(),
 });
 
@@ -1152,9 +1175,13 @@ export const ListIngestionRunsResponseItem = zod.object({
   triggeredBy: zod.string(),
   papersFound: zod.number(),
   papersProcessed: zod.number(),
+  papersDeduplicated: zod.number().optional(),
+  fullTextFetched: zod.number().optional(),
+  lowConfidenceClaims: zod.number().optional(),
   claimsExtracted: zod.number(),
   errorsCount: zod.number(),
   errorDetails: zod.string().nullish(),
+  perSourceCounts: zod.record(zod.string(), zod.number()).nullish(),
   startedAt: zod.string(),
   completedAt: zod.string().nullish(),
   createdAt: zod.string(),
@@ -1179,9 +1206,13 @@ export const GetIngestionRunResultsResponse = zod.object({
     triggeredBy: zod.string(),
     papersFound: zod.number(),
     papersProcessed: zod.number(),
+    papersDeduplicated: zod.number().optional(),
+    fullTextFetched: zod.number().optional(),
+    lowConfidenceClaims: zod.number().optional(),
     claimsExtracted: zod.number(),
     errorsCount: zod.number(),
     errorDetails: zod.string().nullish(),
+    perSourceCounts: zod.record(zod.string(), zod.number()).nullish(),
     startedAt: zod.string(),
     completedAt: zod.string().nullish(),
     createdAt: zod.string(),
@@ -1238,6 +1269,7 @@ export const ListIngestionConfigsResponseItem = zod.object({
   maxPapersPerRun: zod.number(),
   enabled: zod.number(),
   llmModel: zod.string(),
+  sources: zod.array(zod.string()),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -1256,6 +1288,7 @@ export const CreateIngestionConfigBody = zod.object({
   maxPapersPerRun: zod.number().nullish(),
   enabled: zod.number().nullish(),
   llmModel: zod.string().nullish(),
+  sources: zod.array(zod.string()).nullish(),
 });
 
 /**
@@ -1275,6 +1308,7 @@ export const UpdateIngestionConfigBody = zod.object({
   maxPapersPerRun: zod.number().nullish(),
   enabled: zod.number().nullish(),
   llmModel: zod.string().nullish(),
+  sources: zod.array(zod.string()).nullish(),
 });
 
 export const UpdateIngestionConfigResponse = zod.object({
@@ -1285,6 +1319,7 @@ export const UpdateIngestionConfigResponse = zod.object({
   maxPapersPerRun: zod.number(),
   enabled: zod.number(),
   llmModel: zod.string(),
+  sources: zod.array(zod.string()),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -1314,6 +1349,74 @@ export const GetUsageMeResponse = zod.object({
     retryAfterUtc: zod.string(),
     retryAfterSeconds: zod.number(),
   }),
+});
+
+/**
+ * @summary Pending claims awaiting human review (low confidence or flagged)
+ */
+export const ListReviewQueueQueryParams = zod.object({
+  limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
+});
+
+export const ListReviewQueueResponse = zod.object({
+  claims: zod.array(
+    zod.object({
+      id: zod.number(),
+      topicId: zod.number(),
+      topicName: zod.string().nullish(),
+      paperId: zod.number(),
+      paperTitle: zod.string().nullish(),
+      claimText: zod.string(),
+      direction: zod.string(),
+      evidenceQuality: zod.string(),
+      confidence: zod.number(),
+      status: zod.string(),
+      flagCount: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Approve, reject, or edit a pending claim
+ */
+export const ReviewClaimParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const reviewClaimBodyNotesMax = 500;
+
+export const ReviewClaimBody = zod.object({
+  decision: zod.enum(["approve", "reject", "edit"]),
+  notes: zod.string().max(reviewClaimBodyNotesMax).nullish(),
+  edited: zod.record(zod.string(), zod.unknown()).nullish(),
+});
+
+export const ReviewClaimResponse = zod.object({
+  id: zod.number(),
+  status: zod.string(),
+  confidence: zod.number(),
+});
+
+/**
+ * @summary Flag a public claim as misleading or incorrect
+ */
+export const FlagClaimParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const flagClaimBodyReasonMax = 500;
+
+export const FlagClaimBody = zod.object({
+  reason: zod.string().max(flagClaimBodyReasonMax).nullish(),
+});
+
+export const FlagClaimResponse = zod.object({
+  id: zod.number(),
+  flagCount: zod.number(),
+  status: zod.string(),
 });
 
 /**

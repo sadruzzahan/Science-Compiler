@@ -83,8 +83,13 @@ const authLimiter = new FixedWindowLimiter(
   envInt("RATE_LIMIT_AUTH_PER_MIN", 30),
   "auth",
 );
+const flagLimiter = new FixedWindowLimiter(
+  ONE_MIN,
+  envInt("RATE_LIMIT_FLAG_PER_MIN", 5),
+  "flag",
+);
 
-const ALL_LIMITERS = [generalLimiter, synthLimiter, ingestionLimiter, authLimiter];
+const ALL_LIMITERS = [generalLimiter, synthLimiter, ingestionLimiter, authLimiter, flagLimiter];
 
 // Periodic prune every 2 minutes to bound memory.
 setInterval(() => {
@@ -140,6 +145,11 @@ export const authRateLimit = makeMiddleware(
   authLimiter,
   "RATE_LIMITED_AUTH",
   "Too many authentication requests. Please try again shortly.",
+);
+export const flagRateLimit = makeMiddleware(
+  flagLimiter,
+  "RATE_LIMITED_FLAG",
+  "Too many flag submissions. Please try again shortly.",
 );
 
 export function _resetRateLimitsForTests(): void {

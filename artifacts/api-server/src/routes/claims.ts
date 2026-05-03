@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, and, ilike, type SQL } from "drizzle-orm";
-import { db, claimsTable, topicsTable, papersTable, claimSynthesisTable, evidenceLinksTable, studiesTable } from "@workspace/db";
+import { eq, sql, and, ilike, ne, type SQL } from "drizzle-orm";
+import { db, claimsTable, topicsTable, papersTable, claimSynthesisTable, evidenceLinksTable, studiesTable, claimReviewsTable } from "@workspace/db";
 import {
   ListClaimsQueryParams,
   ListClaimsResponse,
@@ -12,8 +12,14 @@ import {
 } from "@workspace/api-zod";
 import { requireUser } from "../middlewares/auth";
 import { embedAndStoreClaim } from "../lib/embeddings";
+import { flagRateLimit } from "../lib/rateLimits";
+import { z } from "zod";
 
 const router: IRouter = Router();
+
+// Public listings/details exclude rejected claims so the trust-and-safety
+// review tooling (admin review queue) is the only place they remain visible.
+const NOT_REJECTED = ne(claimsTable.status, "rejected");
 
 router.get("/claims", async (req, res): Promise<void> => {
   const query = ListClaimsQueryParams.safeParse(req.query);
@@ -24,7 +30,7 @@ router.get("/claims", async (req, res): Promise<void> => {
 
   const { topicId, consensusStatus, evidenceQuality, direction, search, limit = 20, offset = 0 } = query.data;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [NOT_REJECTED];
   if (topicId != null) conditions.push(eq(claimsTable.topicId, topicId));
   if (evidenceQuality) conditions.push(eq(claimsTable.evidenceQuality, evidenceQuality));
   if (direction) conditions.push(eq(claimsTable.direction, direction));
@@ -91,7 +97,7 @@ router.get("/claims/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [claim] = await db.select().from(claimsTable).where(eq(claimsTable.id, id));
+  const [claim] = await db.select().from(claimsTable).where(and(eq(claimsTable.id, id), NOT_REJECTED));
   if (!claim) {
     res.status(404).json({ error: "Claim not found" });
     return;
@@ -208,6 +214,40 @@ router.patch("/claims/:id", requireUser, async (req, res): Promise<void> => {
   if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
   if (claimTextChanged && claim.claimText) void embedAndStoreClaim(claim.id, claim.claimText);
   res.json({ ...claim, embedding: undefined, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
+});
+
+// Public flag endpoint: per-IP rate-limited, no auth required, increments the
+// per-claim `flag_count`. Once a claim accumulates flags it gets bumped back
+// into the admin review queue (status=pending) so a human re-evaluates it.
+const FlagBody = z.object({ reason: z.string().max(500).optional().nullable() });
+const FLAG_THRESHOLD = parseInt(process.env.CLAIM_FLAG_THRESHOLD ?? "1");
+
+router.post("/claims/:id/flag", flagRateLimit, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+  const body = FlagBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const [existing] = await db.select().from(claimsTable).where(eq(claimsTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (existing.status === "rejected") { res.status(404).json({ error: "Claim not found" }); return; }
+
+  const newCount = (existing.flagCount ?? 0) + 1;
+  const newStatus = newCount >= FLAG_THRESHOLD && existing.status === "approved" ? "pending" : existing.status;
+
+  const [updated] = await db.update(claimsTable)
+    .set({ flagCount: newCount, status: newStatus })
+    .where(eq(claimsTable.id, id))
+    .returning({ id: claimsTable.id, flagCount: claimsTable.flagCount, status: claimsTable.status });
+
+  await db.insert(claimReviewsTable).values({
+    claimId: id,
+    reviewerId: req.currentUser?.id ?? null,
+    decision: "flag",
+    notes: body.data.reason ?? null,
+  });
+
+  res.json({ id: updated.id, flagCount: updated.flagCount, status: updated.status });
 });
 
 router.delete("/claims/:id", requireUser, async (req, res): Promise<void> => {

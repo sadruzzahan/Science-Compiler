@@ -964,6 +964,80 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /admin/review-queue:
+    get:
+      operationId: listReviewQueue
+      tags: [admin]
+      summary: Pending claims awaiting human review (low confidence or flagged)
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: ["integer", "null"] }
+        - name: offset
+          in: query
+          schema: { type: ["integer", "null"] }
+      responses:
+        "200":
+          description: Pending claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewQueueResponse"
+
+  /admin/claims/{id}/review:
+    post:
+      operationId: reviewClaim
+      tags: [admin]
+      summary: Approve, reject, or edit a pending claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewClaimBody"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewClaimResponse"
+
+  /claims/{id}/flag:
+    post:
+      operationId: flagClaim
+      tags: [claims]
+      summary: Flag a public claim as misleading or incorrect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagClaimBody"
+      responses:
+        "200":
+          description: Flag recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagClaimResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/usage:
     get:
       operationId: getAdminUsage
@@ -1371,6 +1445,14 @@ components:
           type: string
         openAccessUrl:
           type: ["string", "null"]
+        isPreprint:
+          type: integer
+        fullTextStatus:
+          type: string
+        fullTextSource:
+          type: ["string", "null"]
+        fullTextUrl:
+          type: ["string", "null"]
         createdAt:
           type: string
       required:
@@ -1453,6 +1535,18 @@ components:
           type: string
         openAccessUrl:
           type: ["string", "null"]
+        isPreprint:
+          type: integer
+        fullTextStatus:
+          type: string
+        fullTextSource:
+          type: ["string", "null"]
+        fullTextUrl:
+          type: ["string", "null"]
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperSourceBadge"
         claims:
           type: array
           items:
@@ -1471,8 +1565,22 @@ components:
         - methodologyType
         - evidenceQuality
         - replicationStatus
+        - sources
         - claims
         - createdAt
+
+    PaperSourceBadge:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        displayName:
+          type: string
+        nativeId:
+          type: string
+        url:
+          type: ["string", "null"]
+      required: [sourceId, displayName, nativeId]
 
     PapersListResponse:
       type: object
@@ -1550,6 +1658,12 @@ components:
         replicationStatus:
           type: string
         nReplications:
+          type: integer
+        confidence:
+          type: number
+        status:
+          type: string
+        flagCount:
           type: integer
         createdAt:
           type: string
@@ -2127,12 +2241,21 @@ components:
           type: integer
         papersProcessed:
           type: integer
+        papersDeduplicated:
+          type: integer
+        fullTextFetched:
+          type: integer
+        lowConfidenceClaims:
+          type: integer
         claimsExtracted:
           type: integer
         errorsCount:
           type: integer
         errorDetails:
           type: ["string", "null"]
+        perSourceCounts:
+          type: ["object", "null"]
+          additionalProperties: { type: integer }
         startedAt:
           type: string
         completedAt:
@@ -2221,11 +2344,15 @@ components:
           type: integer
         llmModel:
           type: string
+        sources:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
         updatedAt:
           type: string
-      required: [id, topicId, pubmedQuery, maxPapersPerRun, enabled, llmModel, createdAt, updatedAt]
+      required: [id, topicId, pubmedQuery, maxPapersPerRun, enabled, llmModel, sources, createdAt, updatedAt]
 
     CreateIngestionConfigBody:
       type: object
@@ -2242,6 +2369,10 @@ components:
           type: ["integer", "null"]
         llmModel:
           type: ["string", "null"]
+        sources:
+          type: ["array", "null"]
+          items:
+            type: string
       required: [topicId, pubmedQuery]
 
     UpdateIngestionConfigBody:
@@ -2256,6 +2387,93 @@ components:
           type: ["integer", "null"]
         llmModel:
           type: ["string", "null"]
+        sources:
+          type: ["array", "null"]
+          items:
+            type: string
+
+    PendingClaim:
+      type: object
+      properties:
+        id:
+          type: integer
+        topicId:
+          type: integer
+        topicName:
+          type: ["string", "null"]
+        paperId:
+          type: integer
+        paperTitle:
+          type: ["string", "null"]
+        claimText:
+          type: string
+        direction:
+          type: string
+        evidenceQuality:
+          type: string
+        confidence:
+          type: number
+        status:
+          type: string
+        flagCount:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, topicId, paperId, claimText, direction, evidenceQuality, confidence, status, flagCount, createdAt]
+
+    ReviewQueueResponse:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingClaim"
+        total:
+          type: integer
+      required: [claims, total]
+
+    FlagClaimBody:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]
+          maxLength: 500
+
+    FlagClaimResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        flagCount:
+          type: integer
+        status:
+          type: string
+      required: [id, flagCount, status]
+
+    ReviewClaimBody:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, edit]
+        notes:
+          type: ["string", "null"]
+          maxLength: 500
+        edited:
+          type: ["object", "null"]
+          additionalProperties: true
+      required: [decision]
+
+    ReviewClaimResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        confidence:
+          type: number
+      required: [id, status, confidence]
 
     TriggerIngestionBody:
       type: object

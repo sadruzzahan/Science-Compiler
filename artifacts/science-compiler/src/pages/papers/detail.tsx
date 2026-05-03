@@ -68,6 +68,24 @@ export default function PaperDetailPage({ params }: { params: { id: string } }) 
             {paper.openAccessUrl && <a href={paper.openAccessUrl} target="_blank" rel="noopener" className="text-primary hover:underline flex items-center gap-1" data-testid="link-full-text">Full Text <ExternalLink className="h-3 w-3" /></a>}
           </div>
         )}
+        {((paper.sources && paper.sources.length > 0) || paper.isPreprint === 1 || paper.fullTextStatus === "fetched") && (
+          <div className="flex flex-wrap items-center gap-2 mt-4" data-testid="source-badges">
+            {paper.sources && paper.sources.length > 0 && (
+              <>
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">Indexed by:</span>
+                {paper.sources.map((s) => (
+                  s.url
+                    ? <a key={s.sourceId} href={s.url} target="_blank" rel="noopener" data-testid={`source-${s.sourceId}`}>
+                        <Badge variant="outline" className="text-xs hover:bg-primary/10 cursor-pointer">{s.displayName}</Badge>
+                      </a>
+                    : <Badge key={s.sourceId} variant="outline" className="text-xs" data-testid={`source-${s.sourceId}`}>{s.displayName}</Badge>
+                ))}
+              </>
+            )}
+            {paper.isPreprint === 1 && <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">Preprint</Badge>}
+            {paper.fullTextStatus === "fetched" && <Badge variant="secondary" className="text-xs">Full text</Badge>}
+          </div>
+        )}
       </div>
 
       <Separator className="mb-6" />

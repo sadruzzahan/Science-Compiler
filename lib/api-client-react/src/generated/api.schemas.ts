@@ -278,7 +278,21 @@ export interface Paper {
   replicationStatus: string;
   /** @nullable */
   openAccessUrl?: string | null;
+  isPreprint?: number;
+  fullTextStatus?: string;
+  /** @nullable */
+  fullTextSource?: string | null;
+  /** @nullable */
+  fullTextUrl?: string | null;
   createdAt: string;
+}
+
+export interface PaperSourceBadge {
+  sourceId: string;
+  displayName: string;
+  nativeId: string;
+  /** @nullable */
+  url?: string | null;
 }
 
 export interface PaperDetail {
@@ -303,6 +317,13 @@ export interface PaperDetail {
   replicationStatus: string;
   /** @nullable */
   openAccessUrl?: string | null;
+  isPreprint?: number;
+  fullTextStatus?: string;
+  /** @nullable */
+  fullTextSource?: string | null;
+  /** @nullable */
+  fullTextUrl?: string | null;
+  sources: PaperSourceBadge[];
   claims: ClaimSummary[];
   createdAt: string;
 }
@@ -335,6 +356,9 @@ export interface Claim {
   evidenceQuality: string;
   replicationStatus: string;
   nReplications: number;
+  confidence?: number;
+  status?: string;
+  flagCount?: number;
   createdAt: string;
 }
 
@@ -679,6 +703,11 @@ export interface RecentActivity {
   stats: TopicsStats;
 }
 
+/**
+ * @nullable
+ */
+export type IngestionRunPerSourceCounts = { [key: string]: number } | null;
+
 export interface IngestionRun {
   id: number;
   /** @nullable */
@@ -689,10 +718,15 @@ export interface IngestionRun {
   triggeredBy: string;
   papersFound: number;
   papersProcessed: number;
+  papersDeduplicated?: number;
+  fullTextFetched?: number;
+  lowConfidenceClaims?: number;
   claimsExtracted: number;
   errorsCount: number;
   /** @nullable */
   errorDetails?: string | null;
+  /** @nullable */
+  perSourceCounts?: IngestionRunPerSourceCounts;
   startedAt: string;
   /** @nullable */
   completedAt?: string | null;
@@ -741,6 +775,7 @@ export interface IngestionConfig {
   maxPapersPerRun: number;
   enabled: number;
   llmModel: string;
+  sources: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -758,6 +793,8 @@ export interface CreateIngestionConfigBody {
   enabled?: number | null;
   /** @nullable */
   llmModel?: string | null;
+  /** @nullable */
+  sources?: string[] | null;
 }
 
 export interface UpdateIngestionConfigBody {
@@ -772,6 +809,75 @@ export interface UpdateIngestionConfigBody {
   enabled?: number | null;
   /** @nullable */
   llmModel?: string | null;
+  /** @nullable */
+  sources?: string[] | null;
+}
+
+export interface PendingClaim {
+  id: number;
+  topicId: number;
+  /** @nullable */
+  topicName?: string | null;
+  paperId: number;
+  /** @nullable */
+  paperTitle?: string | null;
+  claimText: string;
+  direction: string;
+  evidenceQuality: string;
+  confidence: number;
+  status: string;
+  flagCount: number;
+  createdAt: string;
+}
+
+export interface ReviewQueueResponse {
+  claims: PendingClaim[];
+  total: number;
+}
+
+export interface FlagClaimBody {
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  reason?: string | null;
+}
+
+export interface FlagClaimResponse {
+  id: number;
+  flagCount: number;
+  status: string;
+}
+
+export type ReviewClaimBodyDecision =
+  (typeof ReviewClaimBodyDecision)[keyof typeof ReviewClaimBodyDecision];
+
+export const ReviewClaimBodyDecision = {
+  approve: "approve",
+  reject: "reject",
+  edit: "edit",
+} as const;
+
+/**
+ * @nullable
+ */
+export type ReviewClaimBodyEdited = { [key: string]: unknown } | null;
+
+export interface ReviewClaimBody {
+  decision: ReviewClaimBodyDecision;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  notes?: string | null;
+  /** @nullable */
+  edited?: ReviewClaimBodyEdited;
+}
+
+export interface ReviewClaimResponse {
+  id: number;
+  status: string;
+  confidence: number;
 }
 
 export interface TriggerIngestionBody {
@@ -1031,4 +1137,15 @@ export type ListIngestionRunsParams = {
    * @nullable
    */
   limit?: number | null;
+};
+
+export type ListReviewQueueParams = {
+  /**
+   * @nullable
+   */
+  limit?: number | null;
+  /**
+   * @nullable
+   */
+  offset?: number | null;
 };

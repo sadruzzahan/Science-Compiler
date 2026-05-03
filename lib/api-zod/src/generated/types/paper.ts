@@ -27,5 +27,11 @@ export interface Paper {
   replicationStatus: string;
   /** @nullable */
   openAccessUrl?: string | null;
+  isPreprint?: number;
+  fullTextStatus?: string;
+  /** @nullable */
+  fullTextSource?: string | null;
+  /** @nullable */
+  fullTextUrl?: string | null;
   createdAt: string;
 }

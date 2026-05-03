@@ -70,7 +70,15 @@ interface ConfigFormData {
   maxPapersPerRun: string;
   llmModel: string;
   enabled: string;
+  sources: string[];
 }
+
+const ALL_SOURCES: Array<{ id: string; label: string }> = [
+  { id: "pubmed", label: "PubMed" },
+  { id: "semantic-scholar", label: "Semantic Scholar" },
+  { id: "openalex", label: "OpenAlex" },
+  { id: "biorxiv", label: "bioRxiv" },
+];
 
 const DEFAULT_FORM: ConfigFormData = {
   topicId: "",
@@ -78,6 +86,7 @@ const DEFAULT_FORM: ConfigFormData = {
   maxPapersPerRun: "20",
   llmModel: "gpt-4o-mini",
   enabled: "1",
+  sources: ["pubmed"],
 };
 
 export default function AdminIngestionPage() {
@@ -169,13 +178,27 @@ export default function AdminIngestionPage() {
       maxPapersPerRun: String(config.maxPapersPerRun),
       llmModel: config.llmModel,
       enabled: String(config.enabled),
+      sources: config.sources && config.sources.length > 0 ? config.sources : ["pubmed"],
     });
     setConfigDialogOpen(true);
+  }
+
+  function toggleSource(id: string) {
+    setForm((f) => {
+      const has = f.sources.includes(id);
+      const next = has ? f.sources.filter((s) => s !== id) : [...f.sources, id];
+      // Always keep at least one source selected; the API enforces this too.
+      return { ...f, sources: next.length === 0 ? f.sources : next };
+    });
   }
 
   function handleSubmit() {
     if (!form.topicId || !form.pubmedQuery) {
       toast({ title: "Topic and PubMed query are required", variant: "destructive" });
+      return;
+    }
+    if (form.sources.length === 0) {
+      toast({ title: "Select at least one source", variant: "destructive" });
       return;
     }
     const payload = {
@@ -184,6 +207,7 @@ export default function AdminIngestionPage() {
       maxPapersPerRun: Number(form.maxPapersPerRun),
       llmModel: form.llmModel,
       enabled: Number(form.enabled),
+      sources: form.sources,
     };
     if (editingConfig) {
       updateMutation.mutate({ id: editingConfig.id, data: payload });
@@ -241,6 +265,13 @@ export default function AdminIngestionPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Max {cfg.maxPapersPerRun} papers · {cfg.llmModel}
                       </p>
+                      {cfg.sources && cfg.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {cfg.sources.map((s) => (
+                            <Badge key={s} variant="outline" className="text-[10px] capitalize">{s}</Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <Button
@@ -388,6 +419,30 @@ export default function AdminIngestionPage() {
                   onChange={(e) => setForm((f) => ({ ...f, llmModel: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sources</Label>
+              <div className="flex flex-wrap gap-2" data-testid="cfg-sources">
+                {ALL_SOURCES.map((s) => {
+                  const active = form.sources.includes(s.id);
+                  return (
+                    <Button
+                      key={s.id}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      className="h-7 text-xs"
+                      onClick={() => toggleSource(s.id)}
+                      data-testid={`cfg-source-${s.id}`}
+                    >
+                      {s.label}
+                    </Button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Same query is fanned out across each selected source; results are deduped by DOI/title.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cfg-enabled">Status</Label>

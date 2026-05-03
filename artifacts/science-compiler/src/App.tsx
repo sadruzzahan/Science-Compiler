@@ -17,6 +17,7 @@ import ClaimsPage from "@/pages/claims";
 import ClaimDetailPage from "@/pages/claims/detail";
 import AdminIngestionPage from "@/pages/admin/ingestion";
 import AdminObservabilityPage from "@/pages/admin/observability";
+import AdminReviewQueuePage from "@/pages/admin/review-queue";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import SignInPage from "@/components/auth/sign-in-page";
 import SignUpPage from "@/components/auth/sign-up-page";
@@ -107,6 +108,11 @@ function AppRoutes() {
             <Route path="/admin/observability">
               <RequireAuth adminOnly>
                 <AdminObservabilityPage />
+              </RequireAuth>
+            </Route>
+            <Route path="/admin/review-queue">
+              <RequireAuth adminOnly>
+                <AdminReviewQueuePage />
               </RequireAuth>
             </Route>
             <Route component={NotFound} />

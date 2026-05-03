@@ -27,5 +27,8 @@ export interface Claim {
   evidenceQuality: string;
   replicationStatus: string;
   nReplications: number;
+  confidence?: number;
+  status?: string;
+  flagCount?: number;
   createdAt: string;
 }

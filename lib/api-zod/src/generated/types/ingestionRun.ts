@@ -5,6 +5,7 @@
  * Science Compiler API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IngestionRunPerSourceCounts } from "./ingestionRunPerSourceCounts";
 
 export interface IngestionRun {
   id: number;
@@ -16,10 +17,15 @@ export interface IngestionRun {
   triggeredBy: string;
   papersFound: number;
   papersProcessed: number;
+  papersDeduplicated?: number;
+  fullTextFetched?: number;
+  lowConfidenceClaims?: number;
   claimsExtracted: number;
   errorsCount: number;
   /** @nullable */
   errorDetails?: string | null;
+  /** @nullable */
+  perSourceCounts?: IngestionRunPerSourceCounts;
   startedAt: string;
   /** @nullable */
   completedAt?: string | null;

@@ -6,16 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface IngestionConfig {
+export interface PendingClaim {
   id: number;
   topicId: number;
   /** @nullable */
   topicName?: string | null;
-  pubmedQuery: string;
-  maxPapersPerRun: number;
-  enabled: number;
-  llmModel: string;
-  sources: string[];
+  paperId: number;
+  /** @nullable */
+  paperTitle?: string | null;
+  claimText: string;
+  direction: string;
+  evidenceQuality: string;
+  confidence: number;
+  status: string;
+  flagCount: number;
   createdAt: string;
-  updatedAt: string;
 }

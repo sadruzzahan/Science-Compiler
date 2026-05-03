@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, and, ilike, type SQL } from "drizzle-orm";
-import { db, papersTable, topicsTable, claimsTable, claimSynthesisTable } from "@workspace/db";
+import { eq, sql, and, ilike, ne, type SQL } from "drizzle-orm";
+import { db, papersTable, topicsTable, claimsTable, claimSynthesisTable, paperSourcesTable } from "@workspace/db";
+import { getAdapter } from "../lib/sources";
 import {
   ListPapersQueryParams,
   ListPapersResponse,
@@ -88,18 +89,31 @@ router.get("/papers/:id", async (req, res): Promise<void> => {
     })
     .from(claimsTable)
     .leftJoin(claimSynthesisTable, eq(claimsTable.id, claimSynthesisTable.claimId))
-    .where(eq(claimsTable.paperId, id));
+    .where(and(eq(claimsTable.paperId, id), ne(claimsTable.status, "rejected")));
 
   const claims = claimsRaw.map(c => ({
     ...c,
     topicName: topic?.name ?? null,
   }));
 
+  // Source attribution badges. Falls back to a single "PubMed" badge for
+  // legacy rows that pre-date the paper_sources table.
+  const sourceRows = await db.select().from(paperSourcesTable).where(eq(paperSourcesTable.paperId, id));
+  const sources = sourceRows.length > 0
+    ? sourceRows.map(s => ({
+        sourceId: s.sourceId,
+        displayName: getAdapter(s.sourceId)?.displayName ?? s.sourceId,
+        nativeId: s.nativeId,
+        url: s.url,
+      }))
+    : (paper.pmid ? [{ sourceId: "pubmed", displayName: "PubMed", nativeId: paper.pmid, url: `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` }] : []);
+
   const result = {
     ...paper,
     topicName: topic?.name ?? "Unknown",
     createdAt: paper.createdAt.toISOString(),
     updatedAt: paper.updatedAt.toISOString(),
+    sources,
     claims,
   };
 

@@ -32,6 +32,8 @@ import type {
   CurrentUser,
   ErrorResponse,
   EvidenceLink,
+  FlagClaimBody,
+  FlagClaimResponse,
   HealthLive200,
   HealthStatus,
   IngestionConfig,
@@ -41,6 +43,7 @@ import type {
   ListEvidenceLinksParams,
   ListIngestionRunsParams,
   ListPapersParams,
+  ListReviewQueueParams,
   ObservabilitySnapshot,
   Paper,
   PaperDetail,
@@ -50,6 +53,9 @@ import type {
   ReadinessResponse,
   RecentActivity,
   ResetBudgetResponse,
+  ReviewClaimBody,
+  ReviewClaimResponse,
+  ReviewQueueResponse,
   Study,
   SynthesisResult,
   SynthesizeQuestionParams,
@@ -3821,6 +3827,274 @@ export function useGetUsageMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Pending claims awaiting human review (low confidence or flagged)
+ */
+export const getListReviewQueueUrl = (params?: ListReviewQueueParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/review-queue?${stringifiedParams}`
+    : `/api/admin/review-queue`;
+};
+
+export const listReviewQueue = async (
+  params?: ListReviewQueueParams,
+  options?: RequestInit,
+): Promise<ReviewQueueResponse> => {
+  return customFetch<ReviewQueueResponse>(getListReviewQueueUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListReviewQueueQueryKey = (params?: ListReviewQueueParams) => {
+  return [`/api/admin/review-queue`, ...(params ? [params] : [])] as const;
+};
+
+export const getListReviewQueueQueryOptions = <
+  TData = Awaited<ReturnType<typeof listReviewQueue>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListReviewQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReviewQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListReviewQueueQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listReviewQueue>>> = ({
+    signal,
+  }) => listReviewQueue(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listReviewQueue>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListReviewQueueQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listReviewQueue>>
+>;
+export type ListReviewQueueQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Pending claims awaiting human review (low confidence or flagged)
+ */
+
+export function useListReviewQueue<
+  TData = Awaited<ReturnType<typeof listReviewQueue>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListReviewQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReviewQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListReviewQueueQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve, reject, or edit a pending claim
+ */
+export const getReviewClaimUrl = (id: number) => {
+  return `/api/admin/claims/${id}/review`;
+};
+
+export const reviewClaim = async (
+  id: number,
+  reviewClaimBody: ReviewClaimBody,
+  options?: RequestInit,
+): Promise<ReviewClaimResponse> => {
+  return customFetch<ReviewClaimResponse>(getReviewClaimUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reviewClaimBody),
+  });
+};
+
+export const getReviewClaimMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewClaim>>,
+    TError,
+    { id: number; data: BodyType<ReviewClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewClaim>>,
+  TError,
+  { id: number; data: BodyType<ReviewClaimBody> },
+  TContext
+> => {
+  const mutationKey = ["reviewClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewClaim>>,
+    { id: number; data: BodyType<ReviewClaimBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reviewClaim(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReviewClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewClaim>>
+>;
+export type ReviewClaimMutationBody = BodyType<ReviewClaimBody>;
+export type ReviewClaimMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve, reject, or edit a pending claim
+ */
+export const useReviewClaim = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewClaim>>,
+    TError,
+    { id: number; data: BodyType<ReviewClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reviewClaim>>,
+  TError,
+  { id: number; data: BodyType<ReviewClaimBody> },
+  TContext
+> => {
+  return useMutation(getReviewClaimMutationOptions(options));
+};
+
+/**
+ * @summary Flag a public claim as misleading or incorrect
+ */
+export const getFlagClaimUrl = (id: number) => {
+  return `/api/claims/${id}/flag`;
+};
+
+export const flagClaim = async (
+  id: number,
+  flagClaimBody?: FlagClaimBody,
+  options?: RequestInit,
+): Promise<FlagClaimResponse> => {
+  return customFetch<FlagClaimResponse>(getFlagClaimUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(flagClaimBody),
+  });
+};
+
+export const getFlagClaimMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof flagClaim>>,
+    TError,
+    { id: number; data: BodyType<FlagClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof flagClaim>>,
+  TError,
+  { id: number; data: BodyType<FlagClaimBody> },
+  TContext
+> => {
+  const mutationKey = ["flagClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof flagClaim>>,
+    { id: number; data: BodyType<FlagClaimBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return flagClaim(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FlagClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof flagClaim>>
+>;
+export type FlagClaimMutationBody = BodyType<FlagClaimBody>;
+export type FlagClaimMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Flag a public claim as misleading or incorrect
+ */
+export const useFlagClaim = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof flagClaim>>,
+    TError,
+    { id: number; data: BodyType<FlagClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof flagClaim>>,
+  TError,
+  { id: number; data: BodyType<FlagClaimBody> },
+  TContext
+> => {
+  return useMutation(getFlagClaimMutationOptions(options));
+};
 
 /**
  * @summary Aggregate usage metrics for admins

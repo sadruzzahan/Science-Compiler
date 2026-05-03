@@ -2,10 +2,7 @@ import { pgTable, text, serial, timestamp, integer, real, vector } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-// Note: the HNSW cosine index on `embedding` (`claims_embedding_idx`) is
-// created by migration 0003. We intentionally do not declare it in schema
-// because the operator-class form trips drizzle's type inference for the
-// whole table; the index lives in the database regardless.
+// Note: HNSW cosine index on `embedding` is created in migration 0003.
 export const claimsTable = pgTable("claims", {
   id: serial("id").primaryKey(),
   topicId: integer("topic_id").notNull(),
@@ -22,6 +19,12 @@ export const claimsTable = pgTable("claims", {
   evidenceQuality: text("evidence_quality").notNull(),
   replicationStatus: text("replication_status").notNull().default("unverified"),
   nReplications: integer("n_replications").notNull().default(0),
+  // confidence (0–1) emitted by the claim extractor; legacy rows backfilled to 0.8.
+  confidence: real("confidence").notNull().default(0.8),
+  // status: 'pending' (low-confidence; awaits review), 'approved', 'rejected', 'edited'.
+  // Public listings filter out 'rejected'.
+  status: text("status").notNull().default("approved"),
+  flagCount: integer("flag_count").notNull().default(0),
   embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

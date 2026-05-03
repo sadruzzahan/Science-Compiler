@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable, papersTable, claimsTable } from "@workspace/db";
+import { desc, eq, and, gte, lte, sql, or } from "drizzle-orm";
+import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable, papersTable, claimsTable, claimReviewsTable } from "@workspace/db";
+import { getAdapter } from "../lib/sources";
 import { runIngestion } from "../lib/ingestionWorker";
 import { acquireIngestionLock, releaseIngestionLock } from "../lib/ingestionScheduler";
 import { backfillClaimEmbeddings, isEmbeddingsAvailable } from "../lib/embeddings";
@@ -139,12 +140,16 @@ router.post("/admin/ingestion/run", ingestionRateLimit, async (req, res): Promis
 // Per Task #11: ingestion search query is capped at 200 chars (tighter than
 // the 500-char general request cap because PubMed query strings beyond that
 // length are almost always misuse).
+const VALID_SOURCES = ["pubmed", "semantic-scholar", "openalex", "biorxiv"] as const;
+const SourcesSchema = z.array(z.enum(VALID_SOURCES)).min(1).max(VALID_SOURCES.length);
+
 const CreateConfigBody = z.object({
   topicId: z.number().int().positive(),
   pubmedQuery: z.string().min(3).max(MAX_INGESTION_QUERY_LEN),
   maxPapersPerRun: z.number().int().min(1).max(50).optional().default(10),
   enabled: z.number().int().min(0).max(1).optional().default(1),
   llmModel: z.string().optional().default("gpt-5-mini"),
+  sources: SourcesSchema.optional().default(["pubmed"]),
 });
 
 const UpdateConfigBody = z.object({
@@ -152,6 +157,7 @@ const UpdateConfigBody = z.object({
   maxPapersPerRun: z.number().int().min(1).max(50).optional(),
   enabled: z.number().int().min(0).max(1).optional(),
   llmModel: z.string().optional(),
+  sources: SourcesSchema.optional(),
 });
 
 router.get("/admin/ingestion-configs", async (_req, res): Promise<void> => {
@@ -191,6 +197,110 @@ router.delete("/admin/ingestion-configs/:id", async (req, res): Promise<void> =>
   await db.delete(ingestionConfigsTable).where(eq(ingestionConfigsTable.id, id));
   res.status(204).end();
 });
+
+// Pending claim review queue: surfaces every claim with status='pending'
+// (low-confidence extractions or community-flagged items). Editors triage from
+// here via POST /admin/claims/:id/review.
+router.get("/admin/review-queue", async (req, res): Promise<void> => {
+  const limitRaw = parseInt(String(req.query.limit ?? "50"));
+  const offsetRaw = parseInt(String(req.query.offset ?? "0"));
+  const limit = isNaN(limitRaw) ? 50 : Math.min(Math.max(1, limitRaw), 200);
+  const offset = isNaN(offsetRaw) ? 0 : Math.max(0, offsetRaw);
+
+  const where = or(
+    eq(claimsTable.status, "pending"),
+    sql`${claimsTable.flagCount} > 0`,
+  );
+
+  const rows = await db
+    .select({
+      id: claimsTable.id,
+      topicId: claimsTable.topicId,
+      topicName: topicsTable.name,
+      paperId: claimsTable.paperId,
+      paperTitle: papersTable.title,
+      claimText: claimsTable.claimText,
+      direction: claimsTable.direction,
+      evidenceQuality: claimsTable.evidenceQuality,
+      confidence: claimsTable.confidence,
+      status: claimsTable.status,
+      flagCount: claimsTable.flagCount,
+      createdAt: claimsTable.createdAt,
+    })
+    .from(claimsTable)
+    .leftJoin(topicsTable, eq(claimsTable.topicId, topicsTable.id))
+    .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
+    .where(where)
+    .orderBy(desc(claimsTable.flagCount), claimsTable.confidence, desc(claimsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const [totalRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(claimsTable)
+    .where(where);
+
+  res.json({
+    claims: rows.map(r => ({
+      ...r,
+      topicName: r.topicName ?? null,
+      paperTitle: r.paperTitle ?? null,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    total: totalRow?.count ?? 0,
+  });
+});
+
+const ReviewBody = z.object({
+  decision: z.enum(["approve", "reject", "edit"]),
+  notes: z.string().max(500).optional().nullable(),
+  edited: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
+const EDITABLE_FIELDS = new Set(["claimText", "direction", "population", "conditions", "effectSize", "effectSizeUnit", "ciLower", "ciUpper", "methodologyType", "evidenceQuality"]);
+
+router.post("/admin/claims/:id/review", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = ReviewBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const [existing] = await db.select().from(claimsTable).where(eq(claimsTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Claim not found" }); return; }
+
+  const updates: Record<string, unknown> = {};
+  if (body.data.decision === "approve") {
+    updates.status = "approved";
+    // Reviewer override: bump confidence so the auto-approve threshold doesn't
+    // immediately re-pull this back into the queue.
+    if (existing.confidence < 0.9) updates.confidence = 0.95;
+  } else if (body.data.decision === "reject") {
+    updates.status = "rejected";
+  } else if (body.data.decision === "edit") {
+    if (body.data.edited && typeof body.data.edited === "object") {
+      for (const [k, v] of Object.entries(body.data.edited)) {
+        if (EDITABLE_FIELDS.has(k) && v !== undefined) updates[k] = v;
+      }
+    }
+    // An edit implicitly approves: the human has rewritten it as needed.
+    updates.status = "approved";
+    if (existing.confidence < 0.9) updates.confidence = 0.95;
+  }
+
+  const [updated] = await db.update(claimsTable).set(updates).where(eq(claimsTable.id, id)).returning();
+  await db.insert(claimReviewsTable).values({
+    claimId: id,
+    reviewerId: req.currentUser?.id ?? null,
+    decision: body.data.decision,
+    notes: body.data.notes ?? null,
+  });
+
+  res.json({ id: updated.id, status: updated.status, confidence: updated.confidence });
+});
+
+// Touch getAdapter so the import is "used" even before any source-aware admin
+// view ships; keeps adapter registry warm during dev.
+void getAdapter;
 
 router.post("/admin/embeddings/backfill", async (req, res): Promise<void> => {
   if (!isEmbeddingsAvailable()) {

@@ -5,8 +5,16 @@ import {
   getGetClaimQueryKey,
   useGetClaimContradictions,
   getGetClaimContradictionsQueryKey,
+  useFlagClaim,
 } from "@workspace/api-client-react";
 import type { EvidenceLinkWithStudy, ContradictionEntry } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Flag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -174,6 +182,38 @@ export default function ClaimDetailPage({ params }: { params: { id: string } }) 
   }
 
   const hasContradictions = claim.contradictingStudies.length > 0;
+  return <ClaimDetailInner id={id} claim={claim} hasContradictions={hasContradictions} />;
+}
+
+function ClaimDetailInner({ id, claim, hasContradictions }: {
+  id: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  claim: any;
+  hasContradictions: boolean;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
+
+  const flagMutation = useFlagClaim({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Thanks — flag submitted", description: "An editor will review this claim." });
+        qc.invalidateQueries({ queryKey: getGetClaimQueryKey(id) });
+        setFlagOpen(false);
+        setFlagReason("");
+      },
+      onError: (err: unknown) => {
+        const status = (err as { status?: number })?.status;
+        toast({
+          title: status === 429 ? "Too many flags" : "Could not submit flag",
+          description: status === 429 ? "Please try again in a minute." : undefined,
+          variant: "destructive",
+        });
+      },
+    },
+  });
 
   return (
     <div className="max-w-4xl mx-auto p-8">
@@ -186,8 +226,24 @@ export default function ClaimDetailPage({ params }: { params: { id: string } }) 
       <div className="mb-6">
         <div className="flex items-start justify-between gap-4 mb-3">
           <h1 className="text-2xl font-bold leading-snug text-foreground" data-testid="claim-title">{claim.claimText}</h1>
-          {claim.synthesis && <ConsensusBadge status={claim.synthesis.consensusStatus} />}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {claim.synthesis && <ConsensusBadge status={claim.synthesis.consensusStatus} />}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => setFlagOpen(true)}
+              data-testid="button-flag-claim"
+            >
+              <Flag className="h-3 w-3 mr-1" /> Flag
+            </Button>
+          </div>
         </div>
+        {claim.status === "pending" && (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 mb-2" data-testid="badge-pending">
+            Awaiting review
+          </Badge>
+        )}
         <div className="flex flex-wrap gap-2 items-center text-sm text-muted-foreground mb-4">
           <Link href={`/topics/${claim.topicId}`}>
             <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/70" data-testid="badge-topic">{claim.topicName}</Badge>
@@ -312,7 +368,7 @@ export default function ClaimDetailPage({ params }: { params: { id: string } }) 
             <p className="text-sm text-muted-foreground">No supporting studies indexed.</p>
           ) : (
             <div className="space-y-3">
-              {claim.supportingStudies.map((link) => <StudyCard key={link.id} link={link} kind="supporting" />)}
+              {claim.supportingStudies.map((link: EvidenceLinkWithStudy) => <StudyCard key={link.id} link={link} kind="supporting" />)}
             </div>
           )}
         </div>
@@ -324,11 +380,41 @@ export default function ClaimDetailPage({ params }: { params: { id: string } }) 
             <p className="text-sm text-muted-foreground">No contradicting studies indexed.</p>
           ) : (
             <div className="space-y-3">
-              {claim.contradictingStudies.map((link) => <StudyCard key={link.id} link={link} kind="contradicting" />)}
+              {claim.contradictingStudies.map((link: EvidenceLinkWithStudy) => <StudyCard key={link.id} link={link} kind="contradicting" />)}
             </div>
           )}
         </div>
       </div>
+
+      <Dialog open={flagOpen} onOpenChange={setFlagOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Flag this claim</DialogTitle>
+            <DialogDescription>
+              Tell us why this claim looks misleading or incorrect. An editor will re-review it.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={flagReason}
+            onChange={(e) => setFlagReason(e.target.value)}
+            placeholder="Optional — what's wrong with this claim?"
+            rows={4}
+            data-testid="flag-reason-input"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFlagOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => flagMutation.mutate({ id, data: { reason: flagReason || null } })}
+              disabled={flagMutation.isPending}
+              data-testid="submit-flag-btn"
+            >
+              {flagMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Submit Flag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
