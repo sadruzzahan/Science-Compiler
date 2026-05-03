@@ -85,6 +85,7 @@ export type ObservabilitySnapshotRoutesItem = {
   errorRate: number;
   p50Ms: number;
   p95Ms: number;
+  p99Ms: number;
 };
 
 export type ObservabilitySnapshotLlmCostSevenDayItem = {
@@ -113,6 +114,42 @@ export type ObservabilitySnapshotPipelineItem = {
   p95Ms: number;
   count: number;
   failed: number;
+};
+
+export type ObservabilitySnapshotRecentSynthesesItemSpansItem = {
+  spanName: string;
+  durationMs: number;
+  failed: number;
+};
+
+export type ObservabilitySnapshotRecentSynthesesItem = {
+  requestId?: string | null;
+  startedAt: string;
+  totalMs: number;
+  failed: boolean;
+  spans: ObservabilitySnapshotRecentSynthesesItemSpansItem[];
+};
+
+export type ObservabilitySnapshotIngestionRecentItem = {
+  id: number;
+  topicId?: number | null;
+  status: string;
+  triggeredBy: string;
+  papersFound: number;
+  papersProcessed: number;
+  claimsExtracted: number;
+  errorsCount: number;
+  startedAt: string;
+  completedAt?: string | null;
+};
+
+export type ObservabilitySnapshotIngestionCountsByStatus24h = {
+  [key: string]: number;
+};
+
+export type ObservabilitySnapshotIngestion = {
+  recent: ObservabilitySnapshotIngestionRecentItem[];
+  countsByStatus24h: ObservabilitySnapshotIngestionCountsByStatus24h;
 };
 
 export type ObservabilitySnapshotSse = {
@@ -144,6 +181,8 @@ export interface ObservabilitySnapshot {
   llmCost: ObservabilitySnapshotLlmCost;
   failingRequestIds: ObservabilitySnapshotFailingRequestIdsItem[];
   pipeline: ObservabilitySnapshotPipelineItem[];
+  recentSyntheses: ObservabilitySnapshotRecentSynthesesItem[];
+  ingestion: ObservabilitySnapshotIngestion;
   sse: ObservabilitySnapshotSse;
   alerts: ObservabilitySnapshotAlerts;
 }

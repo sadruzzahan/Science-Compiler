@@ -32,6 +32,14 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
   req.startTimeMs = performance.now();
   res.setHeader("X-Request-ID", requestId);
 
+  // Set Sentry scope at request start so any thrown error — handled or not —
+  // carries the correct request context, not just successfully-completed ones.
+  setRequestContext({
+    requestId,
+    userId: null,
+    route: req.path.split("?")[0],
+  });
+
   // Inject requestId into any error-shaped JSON body so route-local handlers
   // don't have to thread it through manually.
   const origJson = res.json.bind(res);
@@ -55,11 +63,6 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
     const durationMs = performance.now() - req.startTimeMs;
     const route = normalizeRoute(req);
     recordRequest(route, req.method, res.statusCode, durationMs);
-    setRequestContext({
-      requestId,
-      userId: req.currentUser?.id ?? null,
-      route,
-    });
     // Structured completion log line — the existing pino-http "request
     // completed" line will follow with full req/res serialization.
     req.log?.info(

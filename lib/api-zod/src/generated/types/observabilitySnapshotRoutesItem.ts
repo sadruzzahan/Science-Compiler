@@ -13,4 +13,5 @@ export type ObservabilitySnapshotRoutesItem = {
   errorRate: number;
   p50Ms: number;
   p95Ms: number;
+  p99Ms: number;
 };

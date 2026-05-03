@@ -112,3 +112,20 @@ export function setRequestContext(ctx: { requestId?: string; userId?: string | n
 export function isSentryEnabled(): boolean {
   return sentryEnabled;
 }
+
+// Wire Sentry's Express error handler so uncaught exceptions in any route
+// flow into Sentry with the proper request scope, not just the manually
+// captured ones from the central error handler.
+export function setupSentryErrorHandler(app: unknown): void {
+  if (!sentryEnabled || !sentryModule) return;
+  try {
+    const fn = (sentryModule as unknown as { setupExpressErrorHandler?: (a: unknown) => void })
+      .setupExpressErrorHandler;
+    if (typeof fn === "function") {
+      fn(app);
+      logger.info("Sentry Express error handler attached");
+    }
+  } catch (err) {
+    logger.warn({ err }, "failed to attach Sentry Express error handler");
+  }
+}

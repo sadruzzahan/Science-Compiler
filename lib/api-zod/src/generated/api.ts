@@ -77,6 +77,7 @@ export const GetObservabilityResponse = zod.object({
       errorRate: zod.number(),
       p50Ms: zod.number(),
       p95Ms: zod.number(),
+      p99Ms: zod.number(),
     }),
   ),
   llmCost: zod.object({
@@ -108,6 +109,38 @@ export const GetObservabilityResponse = zod.object({
       failed: zod.number(),
     }),
   ),
+  recentSyntheses: zod.array(
+    zod.object({
+      requestId: zod.string().nullish(),
+      startedAt: zod.coerce.date(),
+      totalMs: zod.number(),
+      failed: zod.boolean(),
+      spans: zod.array(
+        zod.object({
+          spanName: zod.string(),
+          durationMs: zod.number(),
+          failed: zod.number(),
+        }),
+      ),
+    }),
+  ),
+  ingestion: zod.object({
+    recent: zod.array(
+      zod.object({
+        id: zod.number(),
+        topicId: zod.number().nullish(),
+        status: zod.string(),
+        triggeredBy: zod.string(),
+        papersFound: zod.number(),
+        papersProcessed: zod.number(),
+        claimsExtracted: zod.number(),
+        errorsCount: zod.number(),
+        startedAt: zod.coerce.date(),
+        completedAt: zod.coerce.date().nullish(),
+      }),
+    ),
+    countsByStatus24h: zod.record(zod.string(), zod.number()),
+  }),
   sse: zod.object({
     active: zod.number(),
   }),

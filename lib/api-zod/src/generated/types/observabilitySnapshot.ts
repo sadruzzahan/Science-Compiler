@@ -7,8 +7,10 @@
  */
 import type { ObservabilitySnapshotAlerts } from "./observabilitySnapshotAlerts";
 import type { ObservabilitySnapshotFailingRequestIdsItem } from "./observabilitySnapshotFailingRequestIdsItem";
+import type { ObservabilitySnapshotIngestion } from "./observabilitySnapshotIngestion";
 import type { ObservabilitySnapshotLlmCost } from "./observabilitySnapshotLlmCost";
 import type { ObservabilitySnapshotPipelineItem } from "./observabilitySnapshotPipelineItem";
+import type { ObservabilitySnapshotRecentSynthesesItem } from "./observabilitySnapshotRecentSynthesesItem";
 import type { ObservabilitySnapshotRoutesItem } from "./observabilitySnapshotRoutesItem";
 import type { ObservabilitySnapshotSse } from "./observabilitySnapshotSse";
 import type { ObservabilitySnapshotTimeseriesItem } from "./observabilitySnapshotTimeseriesItem";
@@ -20,6 +22,8 @@ export interface ObservabilitySnapshot {
   llmCost: ObservabilitySnapshotLlmCost;
   failingRequestIds: ObservabilitySnapshotFailingRequestIdsItem[];
   pipeline: ObservabilitySnapshotPipelineItem[];
+  recentSyntheses: ObservabilitySnapshotRecentSynthesesItem[];
+  ingestion: ObservabilitySnapshotIngestion;
   sse: ObservabilitySnapshotSse;
   alerts: ObservabilitySnapshotAlerts;
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, metricsBucketsTable, pipelineSpansTable, usageEventsTable, alertsTable } from "@workspace/db";
+import { db, metricsBucketsTable, pipelineSpansTable, usageEventsTable, alertsTable, ingestionRunsTable } from "@workspace/db";
 import { gte, sql, desc, isNull } from "drizzle-orm";
 import { activeSseCount, getInMemoryBuckets } from "../lib/metrics";
 import { getBudgetStatus } from "../lib/usage";
@@ -86,14 +86,25 @@ router.get("/admin/observability", async (_req, res): Promise<void> => {
     if (b.p50Ms > 0) agg.p50.push(b.p50Ms);
     if (b.p95Ms > 0) agg.p95.push(b.p95Ms);
   }
-  const routes = Array.from(perRoute.entries()).map(([k, agg]) => ({
-    route: k,
-    requests: agg.requests,
-    errors: agg.errors,
-    errorRate: agg.requests > 0 ? agg.errors / agg.requests : 0,
-    p50Ms: agg.p50.length ? agg.p50.reduce((s, v) => s + v, 0) / agg.p50.length : 0,
-    p95Ms: agg.p95.length ? agg.p95.reduce((s, v) => s + v, 0) / agg.p95.length : 0,
-  })).sort((a, b) => b.requests - a.requests);
+  const perRouteP99 = new Map<string, number[]>();
+  for (const b of buckets) {
+    const key = `${b.method} ${b.route}`;
+    let arr = perRouteP99.get(key);
+    if (!arr) { arr = []; perRouteP99.set(key, arr); }
+    if (b.p99Ms > 0) arr.push(b.p99Ms);
+  }
+  const routes = Array.from(perRoute.entries()).map(([k, agg]) => {
+    const p99 = perRouteP99.get(k) ?? [];
+    return {
+      route: k,
+      requests: agg.requests,
+      errors: agg.errors,
+      errorRate: agg.requests > 0 ? agg.errors / agg.requests : 0,
+      p50Ms: agg.p50.length ? agg.p50.reduce((s, v) => s + v, 0) / agg.p50.length : 0,
+      p95Ms: agg.p95.length ? agg.p95.reduce((s, v) => s + v, 0) / agg.p95.length : 0,
+      p99Ms: p99.length ? p99.reduce((s, v) => s + v, 0) / p99.length : 0,
+    };
+  }).sort((a, b) => b.requests - a.requests);
 
   const llmCostToday = await db
     .select({ cost: sql<string>`COALESCE(SUM(${usageEventsTable.costUsd}), 0)::text` })
@@ -123,6 +134,7 @@ router.get("/admin/observability", async (_req, res): Promise<void> => {
     .orderBy(sql`COUNT(*) DESC`)
     .limit(10);
 
+  // Aggregate roll-up across spans (last hour) — useful for at-a-glance perf.
   const recentSpans = await db
     .select({
       pipeline: pipelineSpansTable.pipeline,
@@ -136,6 +148,57 @@ router.get("/admin/observability", async (_req, res): Promise<void> => {
     .where(gte(pipelineSpansTable.createdAt, oneHourAgo))
     .groupBy(pipelineSpansTable.pipeline, pipelineSpansTable.spanName)
     .orderBy(pipelineSpansTable.pipeline, pipelineSpansTable.spanName);
+
+  // Per-synthesis breakdown for the last 100 synthesize requests so ops can
+  // drill into a single user query and see exactly where the time went.
+  const recentSyntheses = await db
+    .select({
+      requestId: pipelineSpansTable.requestId,
+      startedAt: sql<Date>`MIN(${pipelineSpansTable.createdAt})`,
+      totalMs: sql<number>`SUM(${pipelineSpansTable.durationMs})::float`,
+      spans: sql<Array<{ spanName: string; durationMs: number; failed: number }>>`
+        json_agg(
+          json_build_object(
+            'spanName', ${pipelineSpansTable.spanName},
+            'durationMs', ${pipelineSpansTable.durationMs},
+            'failed', ${pipelineSpansTable.failed}
+          ) ORDER BY ${pipelineSpansTable.id}
+        )
+      `,
+      anyFailed: sql<number>`MAX(${pipelineSpansTable.failed})::int`,
+    })
+    .from(pipelineSpansTable)
+    .where(sql`${pipelineSpansTable.pipeline} = 'synthesize' AND ${pipelineSpansTable.requestId} IS NOT NULL`)
+    .groupBy(pipelineSpansTable.requestId)
+    .orderBy(sql`MIN(${pipelineSpansTable.createdAt}) DESC`)
+    .limit(100);
+
+  // Ingestion run health — last 20 runs + active counts.
+  const recentIngestion = await db
+    .select({
+      id: ingestionRunsTable.id,
+      topicId: ingestionRunsTable.topicId,
+      status: ingestionRunsTable.status,
+      triggeredBy: ingestionRunsTable.triggeredBy,
+      papersFound: ingestionRunsTable.papersFound,
+      papersProcessed: ingestionRunsTable.papersProcessed,
+      claimsExtracted: ingestionRunsTable.claimsExtracted,
+      errorsCount: ingestionRunsTable.errorsCount,
+      startedAt: ingestionRunsTable.startedAt,
+      completedAt: ingestionRunsTable.completedAt,
+    })
+    .from(ingestionRunsTable)
+    .orderBy(desc(ingestionRunsTable.startedAt))
+    .limit(20);
+
+  const ingestionTotals = await db
+    .select({
+      status: ingestionRunsTable.status,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(ingestionRunsTable)
+    .where(gte(ingestionRunsTable.startedAt, new Date(now - 24 * 60 * 60_000)))
+    .groupBy(ingestionRunsTable.status);
 
   const activeAlerts = await db
     .select()
@@ -166,6 +229,23 @@ router.get("/admin/observability", async (_req, res): Promise<void> => {
       totalCostUsd: parseFloat(r.totalCost),
     })),
     pipeline: recentSpans,
+    recentSyntheses: recentSyntheses.map((r) => ({
+      requestId: r.requestId,
+      startedAt: r.startedAt instanceof Date ? r.startedAt.toISOString() : new Date(r.startedAt).toISOString(),
+      totalMs: r.totalMs,
+      failed: r.anyFailed === 1,
+      spans: r.spans ?? [],
+    })),
+    ingestion: {
+      recent: recentIngestion.map((r) => ({
+        ...r,
+        startedAt: r.startedAt instanceof Date ? r.startedAt.toISOString() : new Date(r.startedAt).toISOString(),
+        completedAt: r.completedAt
+          ? (r.completedAt instanceof Date ? r.completedAt.toISOString() : new Date(r.completedAt).toISOString())
+          : null,
+      })),
+      countsByStatus24h: Object.fromEntries(ingestionTotals.map((r) => [r.status, r.count])),
+    },
     sse: { active: activeSseCount() },
     alerts: { active: activeAlerts, recent: recentAlerts },
     generatedAt: new Date(now).toISOString(),

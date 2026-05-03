@@ -1107,7 +1107,8 @@ components:
               errorRate: { type: number }
               p50Ms: { type: number }
               p95Ms: { type: number }
-            required: [route, requests, errors, errorRate, p50Ms, p95Ms]
+              p99Ms: { type: number }
+            required: [route, requests, errors, errorRate, p50Ms, p95Ms, p99Ms]
         llmCost:
           type: object
           properties:
@@ -1145,6 +1146,48 @@ components:
               count: { type: integer }
               failed: { type: integer }
             required: [pipeline, spanName, avgMs, p95Ms, count, failed]
+        recentSyntheses:
+          type: array
+          items:
+            type: object
+            properties:
+              requestId: { type: string, nullable: true }
+              startedAt: { type: string, format: date-time }
+              totalMs: { type: number }
+              failed: { type: boolean }
+              spans:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    spanName: { type: string }
+                    durationMs: { type: number }
+                    failed: { type: integer }
+                  required: [spanName, durationMs, failed]
+            required: [startedAt, totalMs, failed, spans]
+        ingestion:
+          type: object
+          properties:
+            recent:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  topicId: { type: integer, nullable: true }
+                  status: { type: string }
+                  triggeredBy: { type: string }
+                  papersFound: { type: integer }
+                  papersProcessed: { type: integer }
+                  claimsExtracted: { type: integer }
+                  errorsCount: { type: integer }
+                  startedAt: { type: string, format: date-time }
+                  completedAt: { type: string, format: date-time, nullable: true }
+                required: [id, status, triggeredBy, papersFound, papersProcessed, claimsExtracted, errorsCount, startedAt]
+            countsByStatus24h:
+              type: object
+              additionalProperties: { type: integer }
+          required: [recent, countsByStatus24h]
         sse:
           type: object
           properties:
@@ -1160,7 +1203,7 @@ components:
               type: array
               items: { $ref: "#/components/schemas/AlertRecord" }
           required: [active, recent]
-      required: [generatedAt, timeseries, routes, llmCost, failingRequestIds, pipeline, sse, alerts]
+      required: [generatedAt, timeseries, routes, llmCost, failingRequestIds, pipeline, recentSyntheses, ingestion, sse, alerts]
 
     AlertRecord:
       type: object

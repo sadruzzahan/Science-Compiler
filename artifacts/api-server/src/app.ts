@@ -14,7 +14,7 @@ import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { generalRateLimit } from "./lib/rateLimits";
 import { logger } from "./lib/logger";
-import { captureException } from "./lib/sentry";
+import { captureException, setupSentryErrorHandler } from "./lib/sentry";
 
 const app: Express = express();
 
@@ -61,6 +61,10 @@ app.use(
 
 app.use(attachUser);
 app.use("/api", router);
+
+// Sentry must run BEFORE our central handler so its instrumentation captures
+// the unhandled error first; our handler still emits the user-visible JSON.
+setupSentryErrorHandler(app);
 
 // Centralized error handler — guarantees every error response includes the
 // requestId so users can quote it when reporting issues, and forwards the
