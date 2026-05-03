@@ -10,6 +10,8 @@ import {
   getCachedSynthesis,
   cacheSynthesis,
   getSynthesisByShareId,
+  questionHash,
+  type SynthesisResult,
 } from "../lib/synthesisEngine";
 import { requireUser } from "../middlewares/auth";
 
@@ -311,13 +313,13 @@ router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => 
     const evidence = await retrieveRelevantEvidence(q);
 
     if (evidence.length === 0) {
-      const empty = {
+      const empty: SynthesisResult = {
         question: q,
-        questionHash: "",
+        questionHash: questionHash(q),
         consensusStatus: "insufficient",
         synthesisText: "No relevant evidence found in the knowledge base for this question.",
-        moderatingVariables: [] as string[],
-        methodologicalConcerns: [] as string[],
+        moderatingVariables: [],
+        methodologicalConcerns: [],
         uncertaintyScore: 100,
         temporalTrend: "unclear",
         supportingStudies: [],
@@ -325,6 +327,8 @@ router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => 
         totalEvidence: 0,
         cached: false,
       };
+      // Cache + assign a shareId so even "no evidence" answers are shareable.
+      await cacheSynthesis(empty);
       writeEvent("result", empty);
       res.end();
       return;
