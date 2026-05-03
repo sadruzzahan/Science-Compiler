@@ -17,7 +17,12 @@ router.use(usersRouter);
 
 // Admin routes: gated solely by requireAdmin so anonymous/non-admin callers
 // always get 403 FORBIDDEN regardless of PUBLIC_READ_ENABLED.
-router.use("/admin", requireAdmin, adminRouter);
+// adminRouter routes are already declared with the `/admin/...` prefix, so
+// mount at root and gate with a path-scoped requireAdmin to ensure every
+// /api/admin/* request — including unmatched paths — returns 403 for
+// non-admins instead of leaking 404.
+router.use("/admin", requireAdmin);
+router.use(adminRouter);
 
 // Authenticated-only routes (every handler in queryRouter already calls
 // requireUser; mounting it here avoids accidental public-read leakage).
