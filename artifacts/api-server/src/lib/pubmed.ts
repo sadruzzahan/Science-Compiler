@@ -11,7 +11,11 @@ export interface PubMedPaper {
   publicationYear: number;
   doi: string | null;
   abstract: string;
+  methodsText: string | null;
+  sampleSize: number | null;
+  pValue: string | null;
   openAccessUrl: string | null;
+  rawAbstractXml: string;
 }
 
 function buildUrl(endpoint: string, params: Record<string, string | number>): string {
@@ -49,7 +53,7 @@ function parsePubMedXml(xml: string, pmids: string[]): PubMedPaper[] {
 
       const title = stripTags(extractTag(article, "ArticleTitle") ?? "Untitled");
       const journal = stripTags(extractTag(article, "Title") ?? extractTag(article, "ISOAbbreviation") ?? "Unknown Journal");
-      const abstractText = extractAbstract(article);
+      const { abstractText, methodsText } = extractStructuredAbstract(article);
 
       const authorList = [...article.matchAll(/<Author[^>]*>([\s\S]*?)<\/Author>/g)].map(a => {
         const last = extractTag(a[1], "LastName") ?? "";
@@ -70,7 +74,24 @@ function parsePubMedXml(xml: string, pmids: string[]): PubMedPaper[] {
 
       if (!abstractText || abstractText.length < 50) continue;
 
-      papers.push({ pmid, title, authors, journal, publicationYear, doi, abstract: abstractText, openAccessUrl });
+      const combinedText = [abstractText, methodsText].filter(Boolean).join(" ");
+      const sampleSize = extractSampleSize(combinedText);
+      const pValue = extractPValue(combinedText);
+
+      papers.push({
+        pmid,
+        title,
+        authors,
+        journal,
+        publicationYear,
+        doi,
+        abstract: abstractText,
+        methodsText,
+        sampleSize,
+        pValue,
+        openAccessUrl,
+        rawAbstractXml: match[0],
+      });
     } catch (err) {
       logger.warn({ err }, "Failed to parse PubMed article XML");
     }
@@ -88,12 +109,71 @@ function extractTag(xml: string, tag: string): string | null {
   return match ? stripTags(match[1]) : null;
 }
 
-function extractAbstract(article: string): string {
+function extractStructuredAbstract(article: string): { abstractText: string; methodsText: string | null } {
   const abstractSection = article.match(/<Abstract>([\s\S]*?)<\/Abstract>/i);
-  if (!abstractSection) return "";
-  const texts = [...abstractSection[1].matchAll(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/gi)];
-  if (texts.length > 0) return texts.map(t => stripTags(t[1])).join(" ").trim();
-  return stripTags(abstractSection[1]).trim();
+  if (!abstractSection) return { abstractText: "", methodsText: null };
+
+  const innerXml = abstractSection[1];
+  const sections = [...innerXml.matchAll(/<AbstractText([^>]*)>([\s\S]*?)<\/AbstractText>/gi)];
+
+  if (sections.length === 0) {
+    return { abstractText: stripTags(innerXml).trim(), methodsText: null };
+  }
+
+  const methodSections: string[] = [];
+  const otherSections: string[] = [];
+
+  for (const sec of sections) {
+    const attrs = sec[1] ?? "";
+    const content = stripTags(sec[2]).trim();
+    if (!content) continue;
+
+    const labelMatch = attrs.match(/(?:Label|NlmCategory)="([^"]+)"/i);
+    const label = labelMatch ? labelMatch[1].toUpperCase() : "";
+
+    if (label.includes("METHOD") || label.includes("DESIGN") || label.includes("PROCEDURE")) {
+      methodSections.push(content);
+    } else {
+      otherSections.push(content);
+    }
+  }
+
+  const abstractText = otherSections.join(" ").trim() || sections.map(s => stripTags(s[2])).join(" ").trim();
+  const methodsText = methodSections.length > 0 ? methodSections.join(" ").trim() : null;
+
+  return { abstractText, methodsText };
+}
+
+function extractSampleSize(text: string): number | null {
+  const patterns = [
+    /\b(?:n\s*=\s*|N\s*=\s*)(\d[\d,]+)/,
+    /(\d[\d,]+)\s+(?:participants?|patients?|subjects?|individuals?|adults?|children|women|men)/i,
+    /(?:enrolled|recruited|included|analyzed)\s+(\d[\d,]+)/i,
+    /sample\s+(?:size|of)\s+(\d[\d,]+)/i,
+    /total\s+of\s+(\d[\d,]+)\s+(?:participants?|patients?|subjects?)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const num = parseInt(match[1].replace(/,/g, ""), 10);
+      if (!isNaN(num) && num > 1 && num < 10_000_000) return num;
+    }
+  }
+  return null;
+}
+
+function extractPValue(text: string): string | null {
+  const patterns = [
+    /p\s*[<=>≤≥]\s*0\.\d+/i,
+    /p\s*-?\s*value\s*[<=>≤≥]\s*0\.\d+/i,
+    /p\s*=\s*0\.\d+/i,
+    /p\s*<\s*0\.0{1,4}[1-9]/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[0].replace(/\s+/g, "").toLowerCase();
+  }
+  return null;
 }
 
 function extractArticleId(article: string, idType: string): string | null {

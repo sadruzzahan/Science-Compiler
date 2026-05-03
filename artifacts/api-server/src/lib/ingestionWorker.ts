@@ -103,14 +103,18 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
               pmid: paper.pmid,
               abstract: paper.abstract,
               methodologyType,
-              sampleSize: null,
-              pValue: null,
+              sampleSize: paper.sampleSize ?? null,
+              pValue: paper.pValue ?? null,
               evidenceQuality,
               replicationStatus: "unverified",
               openAccessUrl: paper.openAccessUrl,
+              rawAbstractXml: paper.rawAbstractXml,
             }).returning();
 
-            const claims = await extractClaims(paper.abstract, config.llmModel);
+            const claims = await extractClaims(
+              { abstract: paper.abstract, methodsText: paper.methodsText ?? null },
+              config.llmModel
+            );
 
             for (const claim of claims) {
               const [insertedClaim] = await db.insert(claimsTable).values({

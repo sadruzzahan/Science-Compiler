@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db, ingestionRunsTable, ingestionConfigsTable, topicsTable } from "@workspace/db";
 import { runIngestion } from "../lib/ingestionWorker";
-import { isIngestionRunning } from "../lib/ingestionScheduler";
+import { acquireIngestionLock, releaseIngestionLock } from "../lib/ingestionScheduler";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
@@ -31,16 +31,20 @@ router.get("/admin/ingestion-runs", async (req, res): Promise<void> => {
 });
 
 router.post("/admin/ingestion/run", async (req, res): Promise<void> => {
-  if (isIngestionRunning()) {
+  if (!acquireIngestionLock()) {
     res.status(409).json({ error: "Ingestion is already running" });
     return;
   }
 
   const topicId = req.body?.topicId ? parseInt(req.body.topicId) : undefined;
 
-  runIngestion("manual", topicId).catch(err => {
-    logger.error({ err }, "Manual ingestion run failed");
-  });
+  runIngestion("manual", topicId)
+    .catch(err => {
+      logger.error({ err }, "Manual ingestion run failed");
+    })
+    .finally(() => {
+      releaseIngestionLock();
+    });
 
   res.json({ message: "Ingestion started", topicId: topicId ?? null });
 });

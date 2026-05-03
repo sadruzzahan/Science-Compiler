@@ -18,6 +18,7 @@ export const papersTable = pgTable("papers", {
   evidenceQuality: text("evidence_quality").notNull(),
   replicationStatus: text("replication_status").notNull().default("unverified"),
   openAccessUrl: text("open_access_url"),
+  rawAbstractXml: text("raw_abstract_xml"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

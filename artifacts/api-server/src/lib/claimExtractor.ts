@@ -14,7 +14,7 @@ export interface ExtractedClaim {
   evidenceQuality: "A" | "B" | "C" | "D";
 }
 
-const SYSTEM_PROMPT = `You are a scientific claim extractor. Given the abstract of a scientific paper, extract the key empirical claims as structured JSON.
+const SYSTEM_PROMPT = `You are a scientific claim extractor. Given the abstract (and optionally the methods section) of a scientific paper, extract the key empirical claims as structured JSON.
 
 For each claim:
 - claimText: concise statement of the finding (max 150 chars)
@@ -28,16 +28,27 @@ For each claim:
 - methodologyType: one of "rct", "meta-analysis", "cohort", "case-control", "cross-sectional", "observational", "review", "case-report"
 - evidenceQuality: "A" (systematic review/RCT), "B" (cohort/well-designed), "C" (observational/case-control), "D" (case report/expert opinion)
 
+Use the methods section (when provided) to improve accuracy of methodologyType, population, and evidenceQuality fields.
+
 Return a JSON object: { "claims": [...] }. Extract 1–5 most important claims. Only include claims with direct empirical support from the paper.`;
 
-export async function extractClaims(abstract: string, model: string = "gpt-5-mini"): Promise<ExtractedClaim[]> {
+export interface PaperText {
+  abstract: string;
+  methodsText: string | null;
+}
+
+export async function extractClaims(paperText: PaperText | string, model: string = "gpt-5-mini"): Promise<ExtractedClaim[]> {
+  const text = typeof paperText === "string"
+    ? `ABSTRACT:\n${paperText}`
+    : buildInputText(paperText);
+
   const response = await openai.chat.completions.create({
     model,
     max_completion_tokens: 2000,
     temperature: 0,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Extract claims from this abstract:\n\n${abstract}` },
+      { role: "user", content: `Extract claims from this paper text:\n\n${text}` },
     ],
     response_format: { type: "json_object" },
   });
@@ -58,6 +69,14 @@ export async function extractClaims(abstract: string, model: string = "gpt-5-min
     logger.error({ err, content }, "Failed to parse LLM claim extraction response");
     return [];
   }
+}
+
+function buildInputText({ abstract, methodsText }: PaperText): string {
+  const parts: string[] = [`ABSTRACT:\n${abstract}`];
+  if (methodsText && methodsText.length > 20) {
+    parts.push(`\nMETHODS:\n${methodsText}`);
+  }
+  return parts.join("\n");
 }
 
 function isValidClaim(c: unknown): c is ExtractedClaim {

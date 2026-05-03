@@ -47,3 +47,13 @@ export function stopIngestionScheduler(): void {
 export function isIngestionRunning(): boolean {
   return isRunning;
 }
+
+export function acquireIngestionLock(): boolean {
+  if (isRunning) return false;
+  isRunning = true;
+  return true;
+}
+
+export function releaseIngestionLock(): void {
+  isRunning = false;
+}
