@@ -49,6 +49,12 @@ async function loadUser(req: Request): Promise<User | null> {
         set: { updatedAt: sql`now()` },
       })
       .returning();
+    if (created && role === "admin") {
+      logger.info(
+        { userId: created.id, clerkUserId, email, source: "ADMIN_EMAILS_allowlist" },
+        "User auto-promoted to admin via ADMIN_EMAILS allowlist",
+      );
+    }
     return created ?? null;
   } catch (err) {
     logger.error({ err, clerkUserId }, "Failed to JIT-provision user");

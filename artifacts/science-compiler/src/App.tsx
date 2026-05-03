@@ -69,8 +69,16 @@ function AppRoutes() {
       <Route>
         <AppLayout>
           <Switch>
-            <Route path="/" component={QueryPage} />
-            <Route path="/query" component={QueryPage} />
+            <Route path="/">
+              <RequireAuth>
+                <QueryPage />
+              </RequireAuth>
+            </Route>
+            <Route path="/query">
+              <RequireAuth>
+                <QueryPage />
+              </RequireAuth>
+            </Route>
             <Route path="/topics" component={TopicsPage} />
             <Route path="/topics/:id" component={TopicDetailPage} />
             <Route path="/papers" component={PapersPage} />
