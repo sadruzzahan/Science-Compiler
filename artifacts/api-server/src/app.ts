@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -9,16 +9,24 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { attachUser } from "./middlewares/auth";
+import { requestContextMiddleware } from "./middlewares/requestContext";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { generalRateLimit } from "./lib/rateLimits";
 import { logger } from "./lib/logger";
+import { captureException } from "./lib/sentry";
 
 const app: Express = express();
+
+// requestContext must come first so every downstream middleware (including
+// pino-http) sees req.requestId and the X-Request-ID header is set even on
+// early errors.
+app.use(requestContextMiddleware);
 
 app.use(
   pinoHttp({
     logger,
+    genReqId: (req) => (req as Request).requestId,
     serializers: {
       req(req) {
         return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
@@ -38,7 +46,7 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 // abuse protection as the rest of /api (Task #11 — limiter coverage).
 app.use("/api", generalRateLimit, webhooksRouter);
 
-app.use(cors({ credentials: true, origin: true }));
+app.use(cors({ credentials: true, origin: true, exposedHeaders: ["X-Request-ID"] }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -53,5 +61,26 @@ app.use(
 
 app.use(attachUser);
 app.use("/api", router);
+
+// Centralized error handler — guarantees every error response includes the
+// requestId so users can quote it when reporting issues, and forwards the
+// exception to Sentry with scrubbed context.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const eventId = captureException(err, {
+    requestId: req.requestId,
+    route: req.path,
+    method: req.method,
+    userId: req.currentUser?.id,
+  });
+  req.log?.error({ err, requestId: req.requestId, eventId }, "request.error");
+  if (res.headersSent) return;
+  const status = (err as Error & { status?: number }).status ?? 500;
+  res.status(status).json({
+    error: status >= 500 ? "Internal server error" : err.message,
+    requestId: req.requestId,
+    ...(eventId ? { eventId } : {}),
+  });
+});
 
 export default app;

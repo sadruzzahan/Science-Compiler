@@ -39,6 +39,115 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ReadinessResponseChecksDb = {
+  ok: boolean;
+  latencyMs?: number;
+  error?: string;
+};
+
+export type ReadinessResponseChecksOpenai = {
+  ok: boolean;
+  configured: boolean;
+  latencyMs?: number;
+  error?: string;
+};
+
+export type ReadinessResponseChecks = {
+  db: ReadinessResponseChecksDb;
+  openai: ReadinessResponseChecksOpenai;
+};
+
+export interface ReadinessResponse {
+  status: string;
+  checkedAt: string;
+  checks: ReadinessResponseChecks;
+}
+
+export interface VersionInfo {
+  sha: string;
+  builtAt?: string | null;
+  nodeVersion: string;
+  env: string;
+}
+
+export type ObservabilitySnapshotTimeseriesItem = {
+  ts: string;
+  requests: number;
+  errors: number;
+  errorRate: number;
+  p95Ms: number;
+};
+
+export type ObservabilitySnapshotRoutesItem = {
+  route: string;
+  requests: number;
+  errors: number;
+  errorRate: number;
+  p50Ms: number;
+  p95Ms: number;
+};
+
+export type ObservabilitySnapshotLlmCostSevenDayItem = {
+  day: string;
+  costUsd: number;
+};
+
+export type ObservabilitySnapshotLlmCost = {
+  todayUsd: number;
+  dailyCapUsd: number;
+  utilization: number;
+  sevenDay: ObservabilitySnapshotLlmCostSevenDayItem[];
+};
+
+export type ObservabilitySnapshotFailingRequestIdsItem = {
+  requestId?: string | null;
+  count: number;
+  route?: string | null;
+  totalCostUsd: number;
+};
+
+export type ObservabilitySnapshotPipelineItem = {
+  pipeline: string;
+  spanName: string;
+  avgMs: number;
+  p95Ms: number;
+  count: number;
+  failed: number;
+};
+
+export type ObservabilitySnapshotSse = {
+  active: number;
+};
+
+export type AlertRecordPayload = { [key: string]: unknown } | null;
+
+export interface AlertRecord {
+  id: number;
+  kind: string;
+  severity: string;
+  message: string;
+  payload?: AlertRecordPayload;
+  firedAt: string;
+  resolvedAt?: string | null;
+  notifiedAt?: string | null;
+}
+
+export type ObservabilitySnapshotAlerts = {
+  active: AlertRecord[];
+  recent: AlertRecord[];
+};
+
+export interface ObservabilitySnapshot {
+  generatedAt: string;
+  timeseries: ObservabilitySnapshotTimeseriesItem[];
+  routes: ObservabilitySnapshotRoutesItem[];
+  llmCost: ObservabilitySnapshotLlmCost;
+  failingRequestIds: ObservabilitySnapshotFailingRequestIdsItem[];
+  pipeline: ObservabilitySnapshotPipelineItem[];
+  sse: ObservabilitySnapshotSse;
+  alerts: ObservabilitySnapshotAlerts;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -765,6 +874,11 @@ export interface ContradictionMapResult {
   claimText: string;
   contradictions: ContradictionEntry[];
 }
+
+export type HealthLive200 = {
+  status: string;
+  uptime: number;
+};
 
 export type ListEvidenceLinksParams = {
   /**

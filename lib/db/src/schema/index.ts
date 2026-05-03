@@ -9,3 +9,4 @@ export * from "./ingestion_configs";
 export * from "./question_synthesis";
 export * from "./users";
 export * from "./usage_events";
+export * from "./observability";

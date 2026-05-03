@@ -7,6 +7,7 @@ import studiesRouter from "./studies";
 import evidenceLinksRouter from "./evidence_links";
 import queryRouter from "./query";
 import adminRouter from "./admin";
+import observabilityRouter from "./observability";
 import usersRouter from "./users";
 import usageRouter from "./usage";
 import { requireAdmin, requirePublicReadOrUser } from "../middlewares/auth";
@@ -32,6 +33,7 @@ router.use(usageRouter);
 // non-admins instead of leaking 404.
 router.use("/admin", requireAdmin);
 router.use(adminRouter);
+router.use(observabilityRouter);
 
 // Authenticated-only routes (every handler in queryRouter already calls
 // requireUser; mounting it here avoids accidental public-read leakage).

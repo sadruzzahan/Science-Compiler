@@ -33,7 +33,7 @@ paths:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
+      summary: Health check (legacy)
       description: Returns server health status
       responses:
         "200":
@@ -42,6 +42,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /health/live:
+    get:
+      operationId: healthLive
+      tags: [health]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  uptime: { type: number }
+                required: [status, uptime]
+
+  /health/ready:
+    get:
+      operationId: healthReady
+      tags: [health]
+      summary: Readiness probe
+      description: 200 if DB and OpenAI are reachable; 503 otherwise.
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+
+  /health/version:
+    get:
+      operationId: healthVersion
+      tags: [health]
+      summary: Build/version info
+      responses:
+        "200":
+          description: Version info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionInfo"
+
+  /admin/observability:
+    get:
+      operationId: getObservability
+      tags: [admin]
+      summary: Admin observability snapshot
+      responses:
+        "200":
+          description: Observability metrics, alerts, and pipeline timing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObservabilitySnapshot"
 
   /topics:
     get:
@@ -982,6 +1045,138 @@ components:
           type: string
       required:
         - status
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status: { type: string }
+        checkedAt: { type: string, format: date-time }
+        checks:
+          type: object
+          properties:
+            db:
+              type: object
+              properties:
+                ok: { type: boolean }
+                latencyMs: { type: number }
+                error: { type: string }
+              required: [ok]
+            openai:
+              type: object
+              properties:
+                ok: { type: boolean }
+                configured: { type: boolean }
+                latencyMs: { type: number }
+                error: { type: string }
+              required: [ok, configured]
+          required: [db, openai]
+      required: [status, checks, checkedAt]
+
+    VersionInfo:
+      type: object
+      properties:
+        sha: { type: string }
+        builtAt: { type: string, nullable: true }
+        nodeVersion: { type: string }
+        env: { type: string }
+      required: [sha, nodeVersion, env]
+
+    ObservabilitySnapshot:
+      type: object
+      properties:
+        generatedAt: { type: string, format: date-time }
+        timeseries:
+          type: array
+          items:
+            type: object
+            properties:
+              ts: { type: string, format: date-time }
+              requests: { type: integer }
+              errors: { type: integer }
+              errorRate: { type: number }
+              p95Ms: { type: number }
+            required: [ts, requests, errors, errorRate, p95Ms]
+        routes:
+          type: array
+          items:
+            type: object
+            properties:
+              route: { type: string }
+              requests: { type: integer }
+              errors: { type: integer }
+              errorRate: { type: number }
+              p50Ms: { type: number }
+              p95Ms: { type: number }
+            required: [route, requests, errors, errorRate, p50Ms, p95Ms]
+        llmCost:
+          type: object
+          properties:
+            todayUsd: { type: number }
+            dailyCapUsd: { type: number }
+            utilization: { type: number }
+            sevenDay:
+              type: array
+              items:
+                type: object
+                properties:
+                  day: { type: string }
+                  costUsd: { type: number }
+                required: [day, costUsd]
+          required: [todayUsd, dailyCapUsd, utilization, sevenDay]
+        failingRequestIds:
+          type: array
+          items:
+            type: object
+            properties:
+              requestId: { type: string, nullable: true }
+              count: { type: integer }
+              route: { type: string, nullable: true }
+              totalCostUsd: { type: number }
+            required: [count, totalCostUsd]
+        pipeline:
+          type: array
+          items:
+            type: object
+            properties:
+              pipeline: { type: string }
+              spanName: { type: string }
+              avgMs: { type: number }
+              p95Ms: { type: number }
+              count: { type: integer }
+              failed: { type: integer }
+            required: [pipeline, spanName, avgMs, p95Ms, count, failed]
+        sse:
+          type: object
+          properties:
+            active: { type: integer }
+          required: [active]
+        alerts:
+          type: object
+          properties:
+            active:
+              type: array
+              items: { $ref: "#/components/schemas/AlertRecord" }
+            recent:
+              type: array
+              items: { $ref: "#/components/schemas/AlertRecord" }
+          required: [active, recent]
+      required: [generatedAt, timeseries, routes, llmCost, failingRequestIds, pipeline, sse, alerts]
+
+    AlertRecord:
+      type: object
+      properties:
+        id: { type: integer }
+        kind: { type: string }
+        severity: { type: string }
+        message: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+        firedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        notifiedAt: { type: string, format: date-time, nullable: true }
+      required: [id, kind, severity, message, firedAt]
 
     ErrorResponse:
       type: object

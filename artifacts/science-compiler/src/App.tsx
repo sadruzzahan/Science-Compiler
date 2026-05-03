@@ -16,6 +16,8 @@ import PaperDetailPage from "@/pages/papers/detail";
 import ClaimsPage from "@/pages/claims";
 import ClaimDetailPage from "@/pages/claims/detail";
 import AdminIngestionPage from "@/pages/admin/ingestion";
+import AdminObservabilityPage from "@/pages/admin/observability";
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 import SignInPage from "@/components/auth/sign-in-page";
 import SignUpPage from "@/components/auth/sign-up-page";
 import AccountPage from "@/pages/account";
@@ -102,6 +104,11 @@ function AppRoutes() {
                 <AdminIngestionPage />
               </RequireAuth>
             </Route>
+            <Route path="/admin/observability">
+              <RequireAuth adminOnly>
+                <AdminObservabilityPage />
+              </RequireAuth>
+            </Route>
             <Route component={NotFound} />
           </Switch>
         </AppLayout>
@@ -135,9 +142,11 @@ function ClerkProviderWithRouter() {
 
 function App() {
   return (
-    <WouterRouter base={basePath}>
-      <ClerkProviderWithRouter />
-    </WouterRouter>
+    <AppErrorBoundary>
+      <WouterRouter base={basePath}>
+        <ClerkProviderWithRouter />
+      </WouterRouter>
+    </AppErrorBoundary>
   );
 }
 

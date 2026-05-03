@@ -32,6 +32,7 @@ import type {
   CurrentUser,
   ErrorResponse,
   EvidenceLink,
+  HealthLive200,
   HealthStatus,
   IngestionConfig,
   IngestionRun,
@@ -40,11 +41,13 @@ import type {
   ListEvidenceLinksParams,
   ListIngestionRunsParams,
   ListPapersParams,
+  ObservabilitySnapshot,
   Paper,
   PaperDetail,
   PapersListResponse,
   QueryKnowledgeBaseParams,
   QueryResult,
+  ReadinessResponse,
   RecentActivity,
   ResetBudgetResponse,
   Study,
@@ -64,6 +67,7 @@ import type {
   UsageMeResponse,
   VerifyClaimBody,
   VerifyResult,
+  VersionInfo,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -77,7 +81,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * Returns server health status
- * @summary Health check
+ * @summary Health check (legacy)
  */
 export const getHealthCheckUrl = () => {
   return `/api/healthz`;
@@ -128,7 +132,7 @@ export type HealthCheckQueryResult = NonNullable<
 export type HealthCheckQueryError = ErrorType<unknown>;
 
 /**
- * @summary Health check
+ * @summary Health check (legacy)
  */
 
 export function useHealthCheck<
@@ -143,6 +147,307 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Liveness probe
+ */
+export const getHealthLiveUrl = () => {
+  return `/api/health/live`;
+};
+
+export const healthLive = async (
+  options?: RequestInit,
+): Promise<HealthLive200> => {
+  return customFetch<HealthLive200>(getHealthLiveUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHealthLiveQueryKey = () => {
+  return [`/api/health/live`] as const;
+};
+
+export const getHealthLiveQueryOptions = <
+  TData = Awaited<ReturnType<typeof healthLive>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthLive>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getHealthLiveQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthLive>>> = ({
+    signal,
+  }) => healthLive({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof healthLive>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type HealthLiveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthLive>>
+>;
+export type HealthLiveQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Liveness probe
+ */
+
+export function useHealthLive<
+  TData = Awaited<ReturnType<typeof healthLive>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthLive>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getHealthLiveQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * 200 if DB and OpenAI are reachable; 503 otherwise.
+ * @summary Readiness probe
+ */
+export const getHealthReadyUrl = () => {
+  return `/api/health/ready`;
+};
+
+export const healthReady = async (
+  options?: RequestInit,
+): Promise<ReadinessResponse> => {
+  return customFetch<ReadinessResponse>(getHealthReadyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHealthReadyQueryKey = () => {
+  return [`/api/health/ready`] as const;
+};
+
+export const getHealthReadyQueryOptions = <
+  TData = Awaited<ReturnType<typeof healthReady>>,
+  TError = ErrorType<ReadinessResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthReady>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getHealthReadyQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthReady>>> = ({
+    signal,
+  }) => healthReady({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof healthReady>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type HealthReadyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthReady>>
+>;
+export type HealthReadyQueryError = ErrorType<ReadinessResponse>;
+
+/**
+ * @summary Readiness probe
+ */
+
+export function useHealthReady<
+  TData = Awaited<ReturnType<typeof healthReady>>,
+  TError = ErrorType<ReadinessResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthReady>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getHealthReadyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Build/version info
+ */
+export const getHealthVersionUrl = () => {
+  return `/api/health/version`;
+};
+
+export const healthVersion = async (
+  options?: RequestInit,
+): Promise<VersionInfo> => {
+  return customFetch<VersionInfo>(getHealthVersionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHealthVersionQueryKey = () => {
+  return [`/api/health/version`] as const;
+};
+
+export const getHealthVersionQueryOptions = <
+  TData = Awaited<ReturnType<typeof healthVersion>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthVersion>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getHealthVersionQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthVersion>>> = ({
+    signal,
+  }) => healthVersion({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof healthVersion>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type HealthVersionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthVersion>>
+>;
+export type HealthVersionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Build/version info
+ */
+
+export function useHealthVersion<
+  TData = Awaited<ReturnType<typeof healthVersion>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthVersion>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getHealthVersionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin observability snapshot
+ */
+export const getGetObservabilityUrl = () => {
+  return `/api/admin/observability`;
+};
+
+export const getObservability = async (
+  options?: RequestInit,
+): Promise<ObservabilitySnapshot> => {
+  return customFetch<ObservabilitySnapshot>(getGetObservabilityUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetObservabilityQueryKey = () => {
+  return [`/api/admin/observability`] as const;
+};
+
+export const getGetObservabilityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getObservability>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getObservability>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetObservabilityQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getObservability>>
+  > = ({ signal }) => getObservability({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getObservability>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetObservabilityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getObservability>>
+>;
+export type GetObservabilityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Admin observability snapshot
+ */
+
+export function useGetObservability<
+  TData = Awaited<ReturnType<typeof getObservability>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getObservability>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetObservabilityQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

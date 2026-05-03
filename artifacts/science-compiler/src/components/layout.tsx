@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { BookOpen, FileText, FlaskConical, LayoutDashboard, Search, Settings } from "lucide-react";
+import { Activity, BookOpen, FileText, FlaskConical, LayoutDashboard, Search, Settings } from "lucide-react";
 import { Show } from "@clerk/react";
 import { cn } from "@/lib/utils";
 import { UserMenu } from "@/components/user-menu";
@@ -23,6 +23,7 @@ export function AppLayout({ children }: LayoutProps) {
 
   const adminNavigation = [
     { name: "Ingestion", href: "/admin/ingestion", icon: Settings },
+    { name: "Observability", href: "/admin/observability", icon: Activity },
   ];
 
   const isAdmin = user?.role === "admin";

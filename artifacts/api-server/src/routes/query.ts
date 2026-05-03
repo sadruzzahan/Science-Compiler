@@ -22,6 +22,8 @@ import {
   recordSynthRequest,
 } from "../lib/usage";
 import { tryAcquireStream, releaseStream, getSseCap } from "../lib/sseCap";
+import { withSpan } from "../lib/spans";
+import { trackSseOpen, trackSseClose } from "../lib/metrics";
 
 const MAX_QUERY_LEN = 500;
 const MAX_CLAIM_LEN = 500;
@@ -321,9 +323,10 @@ router.get(
     if (!(await preflightBudgetForSse(req, res))) return;
 
     const userId = req.currentUser!.id;
+    const requestId = req.requestId;
     // Mark this as one quota-counted synthesis request now that all gates
     // (rate limit, budget, quota, input validation) have passed.
-    await recordSynthRequest(userId, "synthesize", req.id ? String(req.id) : null);
+    await recordSynthRequest(userId, "synthesize", requestId);
     if (!tryAcquireStream(userId)) {
       res.setHeader("Retry-After", "5");
       res.status(429).json({
@@ -346,29 +349,41 @@ router.get(
 
     let closed = false;
     let released = false;
+    const sseStart = Date.now();
+    trackSseOpen(requestId);
+    req.log?.info({ requestId, userId, route: "synthesize.sse" }, "sse.open");
     const release = () => {
       if (released) return;
       released = true;
       releaseStream(userId);
+      trackSseClose(requestId);
+      req.log?.info(
+        { requestId, userId, route: "synthesize.sse", durationMs: Date.now() - sseStart },
+        "sse.close",
+      );
     };
     req.on("close", () => {
       closed = true;
       release();
     });
 
+    const spanCtx = { pipeline: "synthesize", requestId, userId };
+
     try {
-      const cached = await getCachedSynthesis(q);
+      const cached = await withSpan(spanCtx, "cache_lookup", () => getCachedSynthesis(q));
       if (cached) {
         writeEvent("cached", cached);
         res.end();
         return;
       }
 
-      const evidence = await retrieveRelevantEvidence(q, {
-        userId,
-        requestId: req.id ? String(req.id) : null,
-        route: "synthesisEngine.retrieveRelevantEvidence",
-      });
+      const evidence = await withSpan(spanCtx, "retrieve", () =>
+        retrieveRelevantEvidence(q, {
+          userId,
+          requestId,
+          route: "synthesisEngine.retrieveRelevantEvidence",
+        }),
+      );
 
       if (evidence.length === 0) {
         const empty: SynthesisResult = {
@@ -386,23 +401,25 @@ router.get(
           cached: false,
         };
         // Cache + assign a shareId so even "no evidence" answers are shareable.
-        await cacheSynthesis(empty);
+        await withSpan(spanCtx, "cache_write", () => cacheSynthesis(empty));
         writeEvent("result", empty);
         res.end();
         return;
       }
 
-      const result = await synthesizeQuestion(
-        q,
-        evidence,
-        (token) => {
-          if (!closed) writeEvent("token", token);
-        },
-        { userId, requestId: req.id ? String(req.id) : null },
+      const result = await withSpan(spanCtx, "synth", () =>
+        synthesizeQuestion(
+          q,
+          evidence,
+          (token) => {
+            if (!closed) writeEvent("token", token);
+          },
+          { userId, requestId },
+        ),
       );
 
       // Await so the persisted shareId is attached to `result` before we emit it.
-      await cacheSynthesis(result);
+      await withSpan(spanCtx, "cache_write", () => cacheSynthesis(result));
       writeEvent("result", result);
       res.end();
     } catch (err) {
@@ -455,11 +472,13 @@ router.post(
     }
     try {
       const userId = req.currentUser!.id;
-      await recordSynthRequest(userId, "verify", req.id ? String(req.id) : null);
-      const result = await verifyClaimText(claim, {
-        userId,
-        requestId: req.id ? String(req.id) : null,
-      });
+      const requestId = req.requestId;
+      await recordSynthRequest(userId, "verify", requestId);
+      const result = await withSpan(
+        { pipeline: "verify", requestId, userId },
+        "verify",
+        () => verifyClaimText(claim, { userId, requestId }),
+      );
       res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

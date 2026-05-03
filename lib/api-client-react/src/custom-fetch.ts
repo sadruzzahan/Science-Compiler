@@ -18,6 +18,13 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 let _onAuthError: ((status: 401 | 403, error: ApiError) => void) | null = null;
+let _onResponseObserver: ((response: Response, requestInfo: { method: string; url: string }) => void) | null = null;
+
+export function setResponseObserver(
+  observer: ((response: Response, requestInfo: { method: string; url: string }) => void) | null,
+): void {
+  _onResponseObserver = observer;
+}
 
 /**
  * Register a global handler invoked whenever a request fails with 401 or 403.
@@ -373,6 +380,14 @@ export async function customFetch<T = unknown>(
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
+
+  if (_onResponseObserver) {
+    try {
+      _onResponseObserver(response, requestInfo);
+    } catch {
+      // Never let observer errors break requests.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

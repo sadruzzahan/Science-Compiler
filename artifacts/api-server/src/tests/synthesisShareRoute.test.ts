@@ -37,13 +37,13 @@ describe("GET /api/synthesis/:shareId", () => {
   it("returns 400 for an invalid share id shape", async () => {
     const res = await request(app).get("/api/synthesis/!!!bad!!!");
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: "Invalid share id" });
+    expect(res.body).toMatchObject({ error: "Invalid share id" });
   });
 
   it("returns 404 for an unknown share id", async () => {
     const res = await request(app).get("/api/synthesis/zzz999unknown");
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: "Synthesis not found" });
+    expect(res.body).toMatchObject({ error: "Synthesis not found" });
   });
 
   it("returns 200 with the stored synthesis for a valid share id (no auth)", async () => {

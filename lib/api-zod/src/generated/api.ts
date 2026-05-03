@@ -9,10 +9,134 @@ import * as zod from "zod";
 
 /**
  * Returns server health status
- * @summary Health check
+ * @summary Health check (legacy)
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+});
+
+/**
+ * @summary Liveness probe
+ */
+export const HealthLiveResponse = zod.object({
+  status: zod.string(),
+  uptime: zod.number(),
+});
+
+/**
+ * 200 if DB and OpenAI are reachable; 503 otherwise.
+ * @summary Readiness probe
+ */
+export const HealthReadyResponse = zod.object({
+  status: zod.string(),
+  checkedAt: zod.coerce.date(),
+  checks: zod.object({
+    db: zod.object({
+      ok: zod.boolean(),
+      latencyMs: zod.number().optional(),
+      error: zod.string().optional(),
+    }),
+    openai: zod.object({
+      ok: zod.boolean(),
+      configured: zod.boolean(),
+      latencyMs: zod.number().optional(),
+      error: zod.string().optional(),
+    }),
+  }),
+});
+
+/**
+ * @summary Build/version info
+ */
+export const HealthVersionResponse = zod.object({
+  sha: zod.string(),
+  builtAt: zod.string().nullish(),
+  nodeVersion: zod.string(),
+  env: zod.string(),
+});
+
+/**
+ * @summary Admin observability snapshot
+ */
+export const GetObservabilityResponse = zod.object({
+  generatedAt: zod.coerce.date(),
+  timeseries: zod.array(
+    zod.object({
+      ts: zod.coerce.date(),
+      requests: zod.number(),
+      errors: zod.number(),
+      errorRate: zod.number(),
+      p95Ms: zod.number(),
+    }),
+  ),
+  routes: zod.array(
+    zod.object({
+      route: zod.string(),
+      requests: zod.number(),
+      errors: zod.number(),
+      errorRate: zod.number(),
+      p50Ms: zod.number(),
+      p95Ms: zod.number(),
+    }),
+  ),
+  llmCost: zod.object({
+    todayUsd: zod.number(),
+    dailyCapUsd: zod.number(),
+    utilization: zod.number(),
+    sevenDay: zod.array(
+      zod.object({
+        day: zod.string(),
+        costUsd: zod.number(),
+      }),
+    ),
+  }),
+  failingRequestIds: zod.array(
+    zod.object({
+      requestId: zod.string().nullish(),
+      count: zod.number(),
+      route: zod.string().nullish(),
+      totalCostUsd: zod.number(),
+    }),
+  ),
+  pipeline: zod.array(
+    zod.object({
+      pipeline: zod.string(),
+      spanName: zod.string(),
+      avgMs: zod.number(),
+      p95Ms: zod.number(),
+      count: zod.number(),
+      failed: zod.number(),
+    }),
+  ),
+  sse: zod.object({
+    active: zod.number(),
+  }),
+  alerts: zod.object({
+    active: zod.array(
+      zod.object({
+        id: zod.number(),
+        kind: zod.string(),
+        severity: zod.string(),
+        message: zod.string(),
+        payload: zod.record(zod.string(), zod.unknown()).nullish(),
+        firedAt: zod.coerce.date(),
+        resolvedAt: zod.coerce.date().nullish(),
+        notifiedAt: zod.coerce.date().nullish(),
+      }),
+    ),
+    recent: zod.array(
+      zod.object({
+        id: zod.number(),
+        kind: zod.string(),
+        severity: zod.string(),
+        message: zod.string(),
+        payload: zod.record(zod.string(), zod.unknown()).nullish(),
+        firedAt: zod.coerce.date(),
+        resolvedAt: zod.coerce.date().nullish(),
+        notifiedAt: zod.coerce.date().nullish(),
+      }),
+    ),
+  }),
 });
 
 /**
