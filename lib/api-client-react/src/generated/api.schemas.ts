@@ -29,6 +29,8 @@ export interface CurrentUser {
   imageUrl?: string | null;
   role: CurrentUserRole;
   status: CurrentUserStatus;
+  /** Subscription plan placeholder */
+  plan: string;
   createdAt: string;
   updatedAt: string;
 }

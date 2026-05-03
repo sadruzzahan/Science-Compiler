@@ -13,6 +13,7 @@ router.get("/users/me", requireUser, async (req, res): Promise<void> => {
     imageUrl: u.imageUrl,
     role: u.role,
     status: u.status,
+    plan: "free",
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
   });

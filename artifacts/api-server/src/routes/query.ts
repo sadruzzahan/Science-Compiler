@@ -284,7 +284,8 @@ router.get("/query/synthesize", async (req, res): Promise<void> => {
   // (mounted in app.ts) populates the auth context.
   const auth = getAuth(req);
   if (!auth?.userId) {
-    res.status(401).json({ error: "Authentication required" });
+    res.setHeader("WWW-Authenticate", 'Bearer realm="api", error="invalid_token"');
+    res.status(401).json({ code: "UNAUTHENTICATED", error: "Authentication required" });
     return;
   }
   const [u] = await db.select().from(usersTable).where(eq(usersTable.clerkId, auth.userId)).limit(1);

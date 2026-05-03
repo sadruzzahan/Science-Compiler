@@ -848,9 +848,10 @@ components:
         imageUrl: { type: string, nullable: true }
         role: { type: string, enum: [user, admin] }
         status: { type: string, enum: [active, suspended] }
+        plan: { type: string, description: "Subscription plan placeholder" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, role, status, createdAt, updatedAt]
+      required: [id, email, role, status, plan, createdAt, updatedAt]
 
     HealthStatus:
       type: object

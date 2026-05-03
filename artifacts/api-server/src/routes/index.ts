@@ -8,12 +8,15 @@ import evidenceLinksRouter from "./evidence_links";
 import queryRouter from "./query";
 import adminRouter from "./admin";
 import usersRouter from "./users";
-import { requireAdmin } from "../middlewares/auth";
+import { requireAdmin, requirePublicReadOrUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(usersRouter);
+// Public-read routes: gated by PUBLIC_READ_ENABLED. When the flag is "false",
+// these endpoints require an authenticated user.
+router.use(requirePublicReadOrUser);
 router.use(topicsRouter);
 router.use(papersRouter);
 router.use(claimsRouter);

@@ -8,6 +8,13 @@
       "when": 1777767559544,
       "tag": "0000_mixed_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777771726543,
+      "tag": "0001_absent_master_chief",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Show, useClerk } from "@clerk/react";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -13,6 +13,8 @@ interface RequireAuthProps {
 export function RequireAuth({ children, adminOnly = false }: RequireAuthProps) {
   const { loaded } = useClerk();
   const { data: user, isLoading } = useCurrentUser();
+  const [location] = useLocation();
+  const returnTo = encodeURIComponent(location || "/");
 
   if (!loaded) {
     return <div className="p-8 text-muted-foreground">Loading…</div>;
@@ -21,7 +23,7 @@ export function RequireAuth({ children, adminOnly = false }: RequireAuthProps) {
   return (
     <>
       <Show when="signed-out">
-        <Redirect to="/sign-in" />
+        <Redirect to={`/sign-in?redirect=${returnTo}`} />
       </Show>
       <Show when="signed-in">
         {isLoading ? (

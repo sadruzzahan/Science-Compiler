@@ -48,9 +48,10 @@ function makeReqRes() {
   const req = {} as Request & { currentUser?: unknown };
   const json = vi.fn();
   const status = vi.fn(() => ({ json }));
-  const res = { status, json } as unknown as Response;
+  const setHeader = vi.fn();
+  const res = { status, json, setHeader } as unknown as Response;
   const next: NextFunction = vi.fn();
-  return { req, res, next, json, status };
+  return { req, res, next, json, status, setHeader };
 }
 
 describe("auth middleware", () => {
@@ -65,7 +66,7 @@ describe("auth middleware", () => {
     const { req, res, next, status, json } = makeReqRes();
     await requireUser(req, res, next);
     expect(status).toHaveBeenCalledWith(401);
-    expect(json).toHaveBeenCalledWith({ error: "Authentication required" });
+    expect(json).toHaveBeenCalledWith({ code: "UNAUTHENTICATED", error: "Authentication required" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -74,7 +75,7 @@ describe("auth middleware", () => {
     req.currentUser = makeUser({ role: "user" });
     await requireAdmin(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
-    expect(json).toHaveBeenCalledWith({ error: "Admin access required" });
+    expect(json).toHaveBeenCalledWith({ code: "FORBIDDEN", error: "Admin access required" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -90,7 +91,7 @@ describe("auth middleware", () => {
     req.currentUser = makeUser({ status: "suspended" });
     await requireUser(req, res, next);
     expect(status).toHaveBeenCalledWith(403);
-    expect(json).toHaveBeenCalledWith({ error: "Account suspended" });
+    expect(json).toHaveBeenCalledWith({ code: "FORBIDDEN", error: "Account suspended" });
     expect(next).not.toHaveBeenCalled();
   });
 });

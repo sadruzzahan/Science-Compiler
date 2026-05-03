@@ -3,6 +3,7 @@ import { getAuth } from "@clerk/express";
 import { eq, sql } from "drizzle-orm";
 import { db, usersTable, type User } from "@workspace/db";
 import { logger } from "../lib/logger";
+import { sendUnauthenticated, sendForbidden } from "../lib/authErrors";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -71,11 +72,11 @@ export const requireUser: RequestHandler = async (req, res, next) => {
     if (user) req.currentUser = user;
   }
   if (!req.currentUser) {
-    res.status(401).json({ error: "Authentication required" });
+    sendUnauthenticated(res);
     return;
   }
   if (req.currentUser.status === "suspended") {
-    res.status(403).json({ error: "Account suspended" });
+    sendForbidden(res, "Account suspended");
     return;
   }
   next();
@@ -87,15 +88,15 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
     if (user) req.currentUser = user;
   }
   if (!req.currentUser) {
-    res.status(401).json({ error: "Authentication required" });
+    sendUnauthenticated(res);
     return;
   }
   if (req.currentUser.status === "suspended") {
-    res.status(403).json({ error: "Account suspended" });
+    sendForbidden(res, "Account suspended");
     return;
   }
   if (req.currentUser.role !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
+    sendForbidden(res, "Admin access required");
     return;
   }
   next();

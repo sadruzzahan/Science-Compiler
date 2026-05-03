@@ -26,8 +26,14 @@ if (!basePath) {
   );
 }
 
+const clerkPubKey =
+  process.env.VITE_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY ?? "";
+
 export default defineConfig({
   base: basePath,
+  define: {
+    "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(clerkPubKey),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -1029,6 +1029,7 @@ export const GetCurrentUserResponse = zod.object({
   imageUrl: zod.string().nullish(),
   role: zod.enum(["user", "admin"]),
   status: zod.enum(["active", "suspended"]),
+  plan: zod.string().describe("Subscription plan placeholder"),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
