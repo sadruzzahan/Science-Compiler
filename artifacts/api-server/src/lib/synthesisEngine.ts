@@ -209,6 +209,15 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     .groupBy(studiesTable.paperId)
     .as("sample_sizes");
 
+  let scoreExpr = sql<number>`0`;
+  for (const term of terms) {
+    const pat = `%${term}%`;
+    scoreExpr = sql`${scoreExpr}
+      + CASE WHEN ${claimsTable.claimText} ILIKE ${pat} THEN 5 ELSE 0 END
+      + CASE WHEN ${papersTable.title} ILIKE ${pat} THEN 2 ELSE 0 END
+      + CASE WHEN ${papersTable.abstract} ILIKE ${pat} THEN 1 ELSE 0 END`;
+  }
+
   const rows = await db
     .select({
       claimId: claimsTable.id,
@@ -228,6 +237,7 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
     .leftJoin(sampleSubq, eq(sampleSubq.paperId, claimsTable.paperId))
     .where(or(...termConditions))
+    .orderBy(sql`(${scoreExpr}) DESC`, claimsTable.id)
     .limit(20);
 
   return rows.map((r) => ({
@@ -249,11 +259,11 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
 const SYNTHESIS_SYSTEM_PROMPT = `You are a scientific evidence synthesizer. Given a research question and indexed evidence items, produce a structured synthesis as JSON.
 
 Return a JSON object with EXACTLY these fields:
-- consensusStatus: "well-established" | "contested" | "preliminary" | "insufficient"
+- consensusStatus: "well-established" | "contested" | "preliminary" | "insufficient evidence"
   well-established = strong majority of high-quality evidence agrees
   contested = significant evidence on both sides
   preliminary = few studies, directionally consistent but limited
-  insufficient = not enough relevant evidence
+  insufficient evidence = not enough relevant evidence
 - synthesisText: 2–4 sentences summarizing what the evidence says about the question (plain language)
 - moderatingVariables: array of strings — key factors that modify the effect (e.g. ["age group", "dosage", "duration"])
 - methodologicalConcerns: array of strings — limitations (e.g. ["most studies cross-sectional", "small samples"])
@@ -403,17 +413,25 @@ export async function verifyClaimText(claimText: string): Promise<VerifyResult> 
     };
   }
 
-  const verdictMap: Record<string, VerifyResult["verdict"]> = {
-    "well-established": "supported",
-    "contested": "contested",
-    "preliminary": "supported",
-    "insufficient": "insufficient",
-  };
-  const verdict = verdictMap[bestSynthesis.consensusStatus] ?? "insufficient";
+  const supporting = bestSynthesis.supportingCount ?? 0;
+  const contradicting = bestSynthesis.contradictingCount ?? 0;
+  const total = supporting + contradicting;
+
+  let verdict: VerifyResult["verdict"];
+  if (total > 0 && contradicting > supporting && contradicting / total > 0.6) {
+    verdict = "contradicted";
+  } else if (bestSynthesis.consensusStatus === "well-established" || bestSynthesis.consensusStatus === "preliminary") {
+    verdict = "supported";
+  } else if (bestSynthesis.consensusStatus === "contested") {
+    verdict = "contested";
+  } else {
+    verdict = "insufficient";
+  }
+
   const confidence = Math.max(10, Math.round(100 - (bestSynthesis.uncertaintyScore ?? 50)));
 
-  const supporting = bestSynthesis.synthesisText;
-  const contradicting =
+  const supportingSummary = bestSynthesis.synthesisText;
+  const contradictingSummary =
     bestSynthesis.contradictingCount > 0
       ? `There are ${bestSynthesis.contradictingCount} contradicting studies. ${
           bestSynthesis.methodologicalConcerns
@@ -428,8 +446,8 @@ export async function verifyClaimText(claimText: string): Promise<VerifyResult> 
     confidence,
     matchedClaimText: bestClaim.claimText,
     matchedClaimId: bestClaim.claimId,
-    supportingSummary: supporting,
-    contradictingSummary: contradicting,
+    supportingSummary,
+    contradictingSummary,
   };
 }
 

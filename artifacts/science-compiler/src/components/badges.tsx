@@ -24,6 +24,10 @@ export function ConsensusBadge({ status, compact }: ConsensusBadgeProps) {
       label: compact ? "Insufficient" : "Insufficient Evidence",
       className: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600",
     },
+    "insufficient": {
+      label: compact ? "Insufficient" : "Insufficient Evidence",
+      className: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600",
+    },
   };
 
   const c = config[status.toLowerCase()] ?? config["preliminary"];

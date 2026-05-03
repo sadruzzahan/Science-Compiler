@@ -174,7 +174,10 @@ function StudyItem({ study, kind }: { study: StudySummary; kind: "supporting" | 
   return (
     <div className={`p-3 rounded border text-sm ${colorClass}`}>
       <div className="font-medium line-clamp-2 leading-snug">{study.claimText}</div>
-      <div className="text-muted-foreground text-xs mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <EvidenceQualityBadge quality={study.evidenceQuality} />
+      </div>
+      <div className="text-muted-foreground text-xs mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
         <span className="capitalize">{study.methodologyType}</span>
         <span>·</span>
         <span>{study.paperTitle.length > 50 ? study.paperTitle.slice(0, 50) + "…" : study.paperTitle}</span>
