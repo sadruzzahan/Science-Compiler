@@ -289,7 +289,8 @@ async function retrieveByVector(question: string): Promise<EvidenceItem[] | null
       .limit(VECTOR_TOP_K);
 
     const filtered = rows.filter((r) => r.distance <= VECTOR_MAX_DISTANCE);
-    if (filtered.length === 0) return null;
+    // Return [] (not null) when the query ran successfully but produced no
+    // in-threshold matches — null is reserved for "vector path unavailable".
     return filtered.map(toEvidenceItem);
   } catch (err) {
     logger.warn({ err }, "Vector retrieval failed; falling back to keyword search");
@@ -297,7 +298,10 @@ async function retrieveByVector(question: string): Promise<EvidenceItem[] | null
   }
 }
 
-async function retrieveByKeywords(question: string): Promise<EvidenceItem[]> {
+async function retrieveByKeywords(
+  question: string,
+  opts: { onlyMissingEmbedding?: boolean } = {},
+): Promise<EvidenceItem[]> {
   const terms = normalizeQuestion(question)
     .split(" ")
     .filter((t) => t.length > 3)
@@ -343,22 +347,67 @@ async function retrieveByKeywords(question: string): Promise<EvidenceItem[]> {
     .from(claimsTable)
     .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
     .leftJoin(sampleSubq, eq(sampleSubq.paperId, claimsTable.paperId))
-    .where(or(...termConditions))
+    .where(
+      opts.onlyMissingEmbedding
+        ? and(or(...termConditions), sql`${claimsTable.embedding} IS NULL`)
+        : or(...termConditions),
+    )
     .orderBy(sql`(${scoreExpr}) DESC`, claimsTable.id)
     .limit(VECTOR_TOP_K);
 
   return rows.map(toEvidenceItem);
 }
 
+/**
+ * Hybrid retrieval:
+ *  - Run cosine-similarity vector search over claims that already have an
+ *    embedding.
+ *  - In parallel, run keyword (ilike) search restricted to claims that do
+ *    NOT yet have an embedding, so backfill-in-progress data is still
+ *    discoverable.
+ *  - Merge & dedupe by claimId, then cap at VECTOR_TOP_K.
+ *  - If the embedding call fails (no key, network error, etc.), fall back
+ *    to a single unrestricted keyword search over all claims.
+ */
 export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
   const vectorResults = await retrieveByVector(question);
-  if (vectorResults && vectorResults.length > 0) {
-    logger.debug({ count: vectorResults.length }, "Retrieved evidence via vector search");
-    return vectorResults;
+
+  if (vectorResults === null) {
+    const keywordResults = await retrieveByKeywords(question);
+    logger.debug(
+      { count: keywordResults.length },
+      "Retrieved evidence via keyword fallback (vector unavailable)",
+    );
+    return keywordResults;
   }
-  const keywordResults = await retrieveByKeywords(question);
-  logger.debug({ count: keywordResults.length }, "Retrieved evidence via keyword fallback");
-  return keywordResults;
+
+  const keywordForUnembedded = await retrieveByKeywords(question, {
+    onlyMissingEmbedding: true,
+  });
+
+  const seen = new Set<number>();
+  const merged: EvidenceItem[] = [];
+  for (const item of vectorResults) {
+    if (seen.has(item.claimId)) continue;
+    seen.add(item.claimId);
+    merged.push(item);
+  }
+  for (const item of keywordForUnembedded) {
+    if (seen.has(item.claimId)) continue;
+    seen.add(item.claimId);
+    merged.push(item);
+  }
+
+  logger.debug(
+    {
+      vector: vectorResults.length,
+      keywordUnembedded: keywordForUnembedded.length,
+      merged: merged.length,
+    },
+    "Retrieved evidence via hybrid vector + keyword search",
+  );
+
+  return merged.slice(0, VECTOR_TOP_K);
 }
 
 const SYNTHESIS_SYSTEM_PROMPT = `You are a scientific evidence synthesizer. Given a research question and indexed evidence items, produce a structured synthesis as JSON.
