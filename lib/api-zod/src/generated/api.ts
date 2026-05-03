@@ -865,6 +865,19 @@ export const GetRecentActivityResponse = zod.object({
 });
 
 /**
+ * Returns a Server-Sent Events stream. Each event is a JSON payload:
+- `{"type":"token","data":"..."}` — partial LLM output token
+- `{"type":"result","data":{...}}` — final SynthesisResult after streaming completes
+- `{"type":"cached","data":{...}}` — SynthesisResult served from 24-hour DB cache
+- `{"type":"error","data":"..."}` — error message
+
+ * @summary AI synthesis of a research question — streams SSE events
+ */
+export const SynthesizeQuestionQueryParams = zod.object({
+  q: zod.coerce.string().describe("The research question to synthesize"),
+});
+
+/**
  * @summary Verify a plain-text claim against the knowledge base
  */
 export const VerifyClaimBody = zod.object({

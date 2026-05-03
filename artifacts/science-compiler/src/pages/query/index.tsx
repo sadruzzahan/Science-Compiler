@@ -36,6 +36,7 @@ interface StudySummary {
   evidenceQuality: string;
   effectSize: number | null;
   effectSizeUnit: string | null;
+  sampleSize: number | null;
   population: string;
   paperTitle: string;
   paperYear: number;
@@ -179,6 +180,12 @@ function StudyItem({ study, kind }: { study: StudySummary; kind: "supporting" | 
         <span>{study.paperTitle.length > 50 ? study.paperTitle.slice(0, 50) + "…" : study.paperTitle}</span>
         <span>·</span>
         <span>{study.paperYear}</span>
+        {study.sampleSize != null && (
+          <>
+            <span>·</span>
+            <span>n={study.sampleSize.toLocaleString()}</span>
+          </>
+        )}
         {study.effectSize != null && (
           <>
             <span>·</span>

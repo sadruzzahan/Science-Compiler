@@ -1,16 +1,17 @@
-import { db, claimsTable, papersTable, evidenceLinksTable, studiesTable } from "@workspace/db";
-import { eq, or, ilike } from "drizzle-orm";
+import {
+  db,
+  claimsTable,
+  papersTable,
+  evidenceLinksTable,
+  studiesTable,
+  claimSynthesisTable,
+  questionSynthesisTable,
+} from "@workspace/db";
+import { eq, or, ilike, inArray, sql, and, lt } from "drizzle-orm";
 import { createHash } from "crypto";
 import { logger } from "./logger";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-interface CacheEntry {
-  result: SynthesisResult;
-  expiresAt: number;
-}
-
-const synthesisCache = new Map<string, CacheEntry>();
 
 export interface EvidenceItem {
   claimId: number;
@@ -21,6 +22,7 @@ export interface EvidenceItem {
   population: string;
   effectSize: number | null;
   effectSizeUnit: string | null;
+  sampleSize: number | null;
   paperTitle: string;
   paperAuthors: string;
   paperYear: number;
@@ -33,6 +35,7 @@ export interface StudySummary {
   evidenceQuality: string;
   effectSize: number | null;
   effectSizeUnit: string | null;
+  sampleSize: number | null;
   population: string;
   paperTitle: string;
   paperYear: number;
@@ -88,26 +91,96 @@ export function questionHash(q: string): string {
   return createHash("sha256").update(normalizeQuestion(q)).digest("hex").slice(0, 16);
 }
 
-export function getCachedSynthesis(q: string): SynthesisResult | null {
+export async function getCachedSynthesis(q: string): Promise<SynthesisResult | null> {
   const hash = questionHash(q);
-  const entry = synthesisCache.get(hash);
-  if (!entry || entry.expiresAt <= Date.now()) {
-    if (entry) synthesisCache.delete(hash);
+  const now = new Date();
+
+  try {
+    const rows = await db
+      .select()
+      .from(questionSynthesisTable)
+      .where(eq(questionSynthesisTable.questionHash, hash))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    if (row.expiresAt <= now) {
+      await db.delete(questionSynthesisTable).where(eq(questionSynthesisTable.id, row.id));
+      return null;
+    }
+    return { ...(row.result as SynthesisResult), cached: true };
+  } catch (err) {
+    logger.warn({ err }, "getCachedSynthesis DB error (non-fatal)");
     return null;
   }
-  return { ...entry.result, cached: true };
 }
 
-export function cacheSynthesis(result: SynthesisResult): void {
-  synthesisCache.set(result.questionHash, {
-    result: { ...result, cached: false },
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  });
+export async function cacheSynthesis(result: SynthesisResult): Promise<void> {
+  const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
+  const toStore = { ...result, cached: false };
+  try {
+    await db
+      .insert(questionSynthesisTable)
+      .values({
+        questionHash: result.questionHash,
+        question: result.question,
+        result: toStore,
+        expiresAt,
+      })
+      .onConflictDoUpdate({
+        target: questionSynthesisTable.questionHash,
+        set: { result: toStore, expiresAt, createdAt: new Date() },
+      });
+  } catch (err) {
+    logger.warn({ err }, "cacheSynthesis DB error (non-fatal)");
+  }
 }
 
 async function getOpenAI() {
   const { openai } = await import("@workspace/integrations-openai-ai-server");
   return openai;
+}
+
+const QUALITY_SCORES: Record<string, number> = { A: 90, B: 65, C: 40, D: 20 };
+
+function avgQualityScore(evidence: EvidenceItem[]): number {
+  if (evidence.length === 0) return 30;
+  return (
+    evidence.reduce((sum, e) => sum + (QUALITY_SCORES[e.evidenceQuality] ?? 30), 0) /
+    evidence.length
+  );
+}
+
+export function computeUncertaintyScore(evidence: EvidenceItem[]): number {
+  if (evidence.length === 0) return 100;
+
+  const totalCount = evidence.length;
+  const avgQuality = avgQualityScore(evidence);
+  const protective = evidence.filter((e) => e.direction === "protective").length;
+  const harmful = evidence.filter((e) => e.direction === "harmful").length;
+  const neutral = evidence.filter((e) => e.direction === "neutral").length;
+  const directionalAgreement = Math.max(protective, harmful, neutral) / totalCount;
+  const countScore = Math.min(1, totalCount / 10);
+
+  const uncertainty = 100 - (
+    countScore * 25 +
+    (avgQuality / 100) * 35 +
+    directionalAgreement * 40
+  );
+  return Math.max(5, Math.min(95, Math.round(uncertainty)));
+}
+
+export function computeTemporalTrend(evidence: EvidenceItem[]): string {
+  if (evidence.length < 4) return "unclear";
+  const currentYear = new Date().getFullYear();
+  const recent = evidence.filter((e) => e.paperYear >= currentYear - 5);
+  const older = evidence.filter((e) => e.paperYear < currentYear - 5);
+  if (recent.length < 2 || older.length < 2) return "unclear";
+  const recentAvg = avgQualityScore(recent);
+  const olderAvg = avgQualityScore(older);
+  if (recentAvg > olderAvg + 15) return "strengthening";
+  if (olderAvg > recentAvg + 15) return "weakening";
+  return "stable";
 }
 
 export async function retrieveRelevantEvidence(question: string): Promise<EvidenceItem[]> {
@@ -127,6 +200,15 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     ];
   });
 
+  const sampleSubq = db
+    .select({
+      paperId: studiesTable.paperId,
+      maxSampleSize: sql<number>`MAX(${studiesTable.sampleSize})`.as("max_sample_size"),
+    })
+    .from(studiesTable)
+    .groupBy(studiesTable.paperId)
+    .as("sample_sizes");
+
   const rows = await db
     .select({
       claimId: claimsTable.id,
@@ -140,9 +222,11 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
       paperTitle: papersTable.title,
       paperAuthors: papersTable.authors,
       paperYear: papersTable.publicationYear,
+      sampleSize: sampleSubq.maxSampleSize,
     })
     .from(claimsTable)
     .leftJoin(papersTable, eq(claimsTable.paperId, papersTable.id))
+    .leftJoin(sampleSubq, eq(sampleSubq.paperId, claimsTable.paperId))
     .where(or(...termConditions))
     .limit(20);
 
@@ -155,6 +239,7 @@ export async function retrieveRelevantEvidence(question: string): Promise<Eviden
     population: r.population,
     effectSize: r.effectSize,
     effectSizeUnit: r.effectSizeUnit,
+    sampleSize: r.sampleSize ?? null,
     paperTitle: r.paperTitle ?? "Unknown",
     paperAuthors: r.paperAuthors ?? "Unknown",
     paperYear: r.paperYear ?? 0,
@@ -172,8 +257,6 @@ Return a JSON object with EXACTLY these fields:
 - synthesisText: 2–4 sentences summarizing what the evidence says about the question (plain language)
 - moderatingVariables: array of strings — key factors that modify the effect (e.g. ["age group", "dosage", "duration"])
 - methodologicalConcerns: array of strings — limitations (e.g. ["most studies cross-sectional", "small samples"])
-- uncertaintyScore: integer 0–100 (0=very certain, 100=highly uncertain). Consider study count, quality, and directional agreement.
-- temporalTrend: "strengthening" | "weakening" | "stable" | "unclear" — whether evidence has changed over time
 - supportingIndices: array of 0-based indices from the evidence list that SUPPORT the question's hypothesis
 - contradictingIndices: array of 0-based indices from the evidence list that CONTRADICT the question's hypothesis
 
@@ -189,7 +272,7 @@ export async function synthesizeQuestion(
   const contextLines = evidence
     .map(
       (e, i) =>
-        `[${i}] "${e.claimText}" | direction=${e.direction} | method=${e.methodologyType} | quality=Grade${e.evidenceQuality} | population="${e.population}" | paper="${e.paperTitle}" (${e.paperYear})`,
+        `[${i}] "${e.claimText}" | direction=${e.direction} | method=${e.methodologyType} | quality=Grade${e.evidenceQuality} | n=${e.sampleSize ?? "?"} | population="${e.population}" | paper="${e.paperTitle}" (${e.paperYear})`,
     )
     .join("\n");
 
@@ -226,8 +309,9 @@ export async function synthesizeQuestion(
 
   const toNum = (v: unknown): number[] =>
     Array.isArray(v)
-      ? (v as unknown[])
-          .filter((x): x is number => typeof x === "number" && x >= 0 && x < evidence.length)
+      ? (v as unknown[]).filter(
+          (x): x is number => typeof x === "number" && x >= 0 && x < evidence.length,
+        )
       : [];
 
   const supportingIndices = toNum(parsed.supportingIndices);
@@ -240,12 +324,17 @@ export async function synthesizeQuestion(
     evidenceQuality: e.evidenceQuality,
     effectSize: e.effectSize,
     effectSizeUnit: e.effectSizeUnit,
+    sampleSize: e.sampleSize,
     population: e.population,
     paperTitle: e.paperTitle,
     paperYear: e.paperYear,
   });
 
   const hash = questionHash(question);
+
+  const uncertaintyScore = computeUncertaintyScore(evidence);
+  const temporalTrend = computeTemporalTrend(evidence);
+
   return {
     question,
     questionHash: hash,
@@ -254,18 +343,17 @@ export async function synthesizeQuestion(
     synthesisText:
       typeof parsed.synthesisText === "string" ? parsed.synthesisText : "Synthesis unavailable.",
     moderatingVariables: Array.isArray(parsed.moderatingVariables)
-      ? (parsed.moderatingVariables as unknown[]).filter((v): v is string => typeof v === "string")
+      ? (parsed.moderatingVariables as unknown[]).filter(
+          (v): v is string => typeof v === "string",
+        )
       : [],
     methodologicalConcerns: Array.isArray(parsed.methodologicalConcerns)
       ? (parsed.methodologicalConcerns as unknown[]).filter(
           (v): v is string => typeof v === "string",
         )
       : [],
-    uncertaintyScore:
-      typeof parsed.uncertaintyScore === "number"
-        ? Math.max(0, Math.min(100, Math.round(parsed.uncertaintyScore)))
-        : 50,
-    temporalTrend: typeof parsed.temporalTrend === "string" ? parsed.temporalTrend : "unclear",
+    uncertaintyScore,
+    temporalTrend,
     supportingStudies: supportingIndices.map((i) => toSummary(evidence[i])),
     contradictingStudies: contradictingIndices.map((i) => toSummary(evidence[i])),
     totalEvidence: evidence.length,
@@ -288,75 +376,60 @@ export async function verifyClaimText(claimText: string): Promise<VerifyResult> 
     };
   }
 
-  const openai = await getOpenAI();
-  const contextLines = evidence
-    .slice(0, 10)
-    .map(
-      (e, i) =>
-        `[${i}] "${e.claimText}" | direction=${e.direction} | quality=Grade${e.evidenceQuality} | method=${e.methodologyType}`,
+  const bestClaim = evidence[0];
+
+  const syntheses = await db
+    .select()
+    .from(claimSynthesisTable)
+    .where(
+      inArray(
+        claimSynthesisTable.claimId,
+        evidence.slice(0, 5).map((e) => e.claimId),
+      ),
     )
-    .join("\n");
+    .limit(5);
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content: `You are a scientific fact-checker. Assess whether a claim is supported by the provided evidence.
+  const bestSynthesis = syntheses.find((s) => s.claimId === bestClaim.claimId) ?? syntheses[0];
 
-Return JSON with:
-- verdict: "supported" | "contested" | "contradicted" | "insufficient"
-- confidence: integer 0-100 (confidence in the verdict)
-- bestMatchIndex: 0-based index of the most relevant evidence item (-1 if none)
-- supportingSummary: 1-2 sentences summarizing supporting evidence (empty string if none)
-- contradictingSummary: 1-2 sentences summarizing contradicting evidence (empty string if none)`,
-      },
-      {
-        role: "user",
-        content: `Claim: "${claimText}"\n\nEvidence:\n${contextLines}\n\nReturn JSON assessment.`,
-      },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0,
-    max_completion_tokens: 500,
-  });
-
-  const content = response.choices[0]?.message?.content ?? "{}";
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    logger.error({ content }, "Failed to parse verify LLM response");
+  if (!bestSynthesis) {
+    return {
+      claim: claimText,
+      verdict: "insufficient",
+      confidence: 15,
+      matchedClaimText: bestClaim.claimText,
+      matchedClaimId: bestClaim.claimId,
+      supportingSummary: `Found a related claim: "${bestClaim.claimText}" (${bestClaim.direction}, Grade ${bestClaim.evidenceQuality}). No synthesis has been generated for this claim yet.`,
+      contradictingSummary: "",
+    };
   }
 
-  const bestMatchIndex =
-    typeof parsed.bestMatchIndex === "number" ? parsed.bestMatchIndex : -1;
-  const bestMatch =
-    bestMatchIndex >= 0 && bestMatchIndex < evidence.length
-      ? evidence[bestMatchIndex]
-      : null;
+  const verdictMap: Record<string, VerifyResult["verdict"]> = {
+    "well-established": "supported",
+    "contested": "contested",
+    "preliminary": "supported",
+    "insufficient": "insufficient",
+  };
+  const verdict = verdictMap[bestSynthesis.consensusStatus] ?? "insufficient";
+  const confidence = Math.max(10, Math.round(100 - (bestSynthesis.uncertaintyScore ?? 50)));
 
-  const VALID_VERDICTS = ["supported", "contested", "contradicted", "insufficient"] as const;
-  const rawVerdict = parsed.verdict as string;
-  const verdict = (
-    VALID_VERDICTS.includes(rawVerdict as (typeof VALID_VERDICTS)[number])
-      ? rawVerdict
-      : "insufficient"
-  ) as VerifyResult["verdict"];
+  const supporting = bestSynthesis.synthesisText;
+  const contradicting =
+    bestSynthesis.contradictingCount > 0
+      ? `There are ${bestSynthesis.contradictingCount} contradicting studies. ${
+          bestSynthesis.methodologicalConcerns
+            ? "Methodological concerns: " + bestSynthesis.methodologicalConcerns
+            : ""
+        }`.trim()
+      : "";
 
   return {
     claim: claimText,
     verdict,
-    confidence:
-      typeof parsed.confidence === "number"
-        ? Math.max(0, Math.min(100, Math.round(parsed.confidence)))
-        : 0,
-    matchedClaimText: bestMatch?.claimText ?? null,
-    matchedClaimId: bestMatch?.claimId ?? null,
-    supportingSummary:
-      typeof parsed.supportingSummary === "string" ? parsed.supportingSummary : "",
-    contradictingSummary:
-      typeof parsed.contradictingSummary === "string" ? parsed.contradictingSummary : "",
+    confidence,
+    matchedClaimText: bestClaim.claimText,
+    matchedClaimId: bestClaim.claimId,
+    supportingSummary: supporting,
+    contradictingSummary: contradicting,
   };
 }
 
@@ -405,7 +478,11 @@ Why do they contradict each other? Return JSON.`,
 
 export async function buildContradictionMap(claimId: number): Promise<ContradictionMapResult> {
   const claim = await db
-    .select({ id: claimsTable.id, claimText: claimsTable.claimText, population: claimsTable.population })
+    .select({
+      id: claimsTable.id,
+      claimText: claimsTable.claimText,
+      population: claimsTable.population,
+    })
     .from(claimsTable)
     .where(eq(claimsTable.id, claimId))
     .limit(1);
@@ -444,7 +521,10 @@ export async function buildContradictionMap(claimId: number): Promise<Contradict
           .set({ contradictionExplanation: explanation })
           .where(eq(evidenceLinksTable.id, link.evidence_links.id));
       } catch (err) {
-        logger.warn({ err, claimId, linkId: link.evidence_links.id }, "Failed to generate contradiction explanation");
+        logger.warn(
+          { err, claimId, linkId: link.evidence_links.id },
+          "Failed to generate contradiction explanation",
+        );
         explanation = "Contradiction explanation unavailable.";
       }
     }

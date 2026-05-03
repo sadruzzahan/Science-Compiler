@@ -296,7 +296,7 @@ router.get("/query/synthesize", async (req, res): Promise<void> => {
   req.on("close", () => { closed = true; });
 
   try {
-    const cached = getCachedSynthesis(q);
+    const cached = await getCachedSynthesis(q);
     if (cached) {
       writeEvent("cached", cached);
       res.end();

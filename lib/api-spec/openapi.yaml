@@ -620,6 +620,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecentActivity"
 
+  /query/synthesize:
+    get:
+      operationId: synthesizeQuestion
+      tags: [query]
+      summary: AI synthesis of a research question — streams SSE events
+      description: |
+        Returns a Server-Sent Events stream. Each event is a JSON payload:
+        - `{"type":"token","data":"..."}` — partial LLM output token
+        - `{"type":"result","data":{...}}` — final SynthesisResult after streaming completes
+        - `{"type":"cached","data":{...}}` — SynthesisResult served from 24-hour DB cache
+        - `{"type":"error","data":"..."}` — error message
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The research question to synthesize
+      responses:
+        "200":
+          description: SSE stream of synthesis events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /query/verify:
     post:
       operationId: verifyClaim

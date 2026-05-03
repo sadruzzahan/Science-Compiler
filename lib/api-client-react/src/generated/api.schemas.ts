@@ -695,6 +695,13 @@ export type QueryKnowledgeBaseParams = {
   q: string;
 };
 
+export type SynthesizeQuestionParams = {
+  /**
+   * The research question to synthesize
+   */
+  q: string;
+};
+
 export type ListIngestionRunsParams = {
   /**
    * @nullable

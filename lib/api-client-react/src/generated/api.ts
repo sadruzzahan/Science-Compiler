@@ -44,6 +44,7 @@ import type {
   QueryResult,
   RecentActivity,
   Study,
+  SynthesizeQuestionParams,
   Topic,
   TopicDetail,
   TopicsStats,
@@ -2453,6 +2454,109 @@ export function useGetRecentActivity<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecentActivityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a Server-Sent Events stream. Each event is a JSON payload:
+- `{"type":"token","data":"..."}` — partial LLM output token
+- `{"type":"result","data":{...}}` — final SynthesisResult after streaming completes
+- `{"type":"cached","data":{...}}` — SynthesisResult served from 24-hour DB cache
+- `{"type":"error","data":"..."}` — error message
+
+ * @summary AI synthesis of a research question — streams SSE events
+ */
+export const getSynthesizeQuestionUrl = (params: SynthesizeQuestionParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/query/synthesize?${stringifiedParams}`
+    : `/api/query/synthesize`;
+};
+
+export const synthesizeQuestion = async (
+  params: SynthesizeQuestionParams,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getSynthesizeQuestionUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSynthesizeQuestionQueryKey = (
+  params?: SynthesizeQuestionParams,
+) => {
+  return [`/api/query/synthesize`, ...(params ? [params] : [])] as const;
+};
+
+export const getSynthesizeQuestionQueryOptions = <
+  TData = Awaited<ReturnType<typeof synthesizeQuestion>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SynthesizeQuestionParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof synthesizeQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSynthesizeQuestionQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof synthesizeQuestion>>
+  > = ({ signal }) => synthesizeQuestion(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof synthesizeQuestion>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SynthesizeQuestionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof synthesizeQuestion>>
+>;
+export type SynthesizeQuestionQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary AI synthesis of a research question — streams SSE events
+ */
+
+export function useSynthesizeQuestion<
+  TData = Awaited<ReturnType<typeof synthesizeQuestion>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SynthesizeQuestionParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof synthesizeQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSynthesizeQuestionQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
