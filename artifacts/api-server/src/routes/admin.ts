@@ -37,8 +37,9 @@ router.post("/admin/ingestion/run", async (req, res): Promise<void> => {
   }
 
   const topicId = req.body?.topicId ? parseInt(req.body.topicId) : undefined;
+  const userId = req.currentUser?.id;
 
-  runIngestion("manual", topicId)
+  runIngestion("manual", topicId, userId)
     .catch(err => {
       logger.error({ err }, "Manual ingestion run failed");
     })
@@ -81,7 +82,7 @@ router.get("/admin/ingestion-configs", async (_req, res): Promise<void> => {
 router.post("/admin/ingestion-configs", async (req, res): Promise<void> => {
   const body = CreateConfigBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-  const [config] = await db.insert(ingestionConfigsTable).values(body.data).returning();
+  const [config] = await db.insert(ingestionConfigsTable).values({ ...body.data, createdByUserId: req.currentUser?.id ?? null, updatedByUserId: req.currentUser?.id ?? null }).returning();
   res.status(201).json({ ...config, createdAt: config.createdAt.toISOString(), updatedAt: config.updatedAt.toISOString() });
 });
 
@@ -90,7 +91,7 @@ router.patch("/admin/ingestion-configs/:id", async (req, res): Promise<void> => 
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const body = UpdateConfigBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-  const [updated] = await db.update(ingestionConfigsTable).set(body.data).where(eq(ingestionConfigsTable.id, id)).returning();
+  const [updated] = await db.update(ingestionConfigsTable).set({ ...body.data, updatedByUserId: req.currentUser?.id ?? null }).where(eq(ingestionConfigsTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "Config not found" }); return; }
   res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
 });

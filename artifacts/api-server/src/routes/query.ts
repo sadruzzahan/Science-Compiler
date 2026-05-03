@@ -10,6 +10,9 @@ import {
   getCachedSynthesis,
   cacheSynthesis,
 } from "../lib/synthesisEngine";
+import { requireUser } from "../middlewares/auth";
+import { getAuth } from "@clerk/express";
+import { usersTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -276,6 +279,20 @@ router.get("/query", async (req, res): Promise<void> => {
 });
 
 router.get("/query/synthesize", async (req, res): Promise<void> => {
+  // SSE endpoint: frontend uses fetch+ReadableStream (not EventSource) so
+  // session cookies are sent automatically by the browser. Clerk middleware
+  // (mounted in app.ts) populates the auth context.
+  const auth = getAuth(req);
+  if (!auth?.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const [u] = await db.select().from(usersTable).where(eq(usersTable.clerkId, auth.userId)).limit(1);
+  if (u && u.status === "suspended") {
+    res.status(403).json({ error: "Account suspended" });
+    return;
+  }
+
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (!q) {
     res.status(400).json({ error: "q query parameter is required" });
@@ -341,7 +358,7 @@ router.get("/query/synthesize", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/query/verify", async (req, res): Promise<void> => {
+router.post("/query/verify", requireUser, async (req, res): Promise<void> => {
   const claim = typeof req.body?.claim === "string" ? req.body.claim.trim() : "";
   if (!claim) {
     res.status(400).json({ error: "claim is required" });
@@ -356,8 +373,8 @@ router.post("/query/verify", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/claims/:id/contradictions", async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+router.get("/claims/:id/contradictions", requireUser, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid claim id" });
     return;

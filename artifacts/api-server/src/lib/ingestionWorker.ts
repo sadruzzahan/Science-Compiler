@@ -20,7 +20,7 @@ export interface IngestionResult {
   errors: string[];
 }
 
-export async function runIngestion(triggeredBy: "scheduler" | "manual" = "scheduler", topicIdFilter?: number): Promise<IngestionResult[]> {
+export async function runIngestion(triggeredBy: "scheduler" | "manual" = "scheduler", topicIdFilter?: number, createdByUserId?: string): Promise<IngestionResult[]> {
   const configs = await db.select({
     config: ingestionConfigsTable,
     topic: topicsTable,
@@ -44,6 +44,7 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
       status: "running",
       triggeredBy,
       startedAt: new Date(),
+      createdByUserId: createdByUserId ?? null,
     }).returning();
 
     const result: IngestionResult = {

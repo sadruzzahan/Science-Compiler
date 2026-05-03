@@ -1017,3 +1017,18 @@ export const UpdateIngestionConfigResponse = zod.object({
 export const DeleteIngestionConfigParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * @summary Get current authenticated user
+ */
+export const GetCurrentUserResponse = zod.object({
+  id: zod.string().uuid(),
+  email: zod.string(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+  role: zod.enum(["user", "admin"]),
+  status: zod.enum(["active", "suspended"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});

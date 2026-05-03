@@ -817,8 +817,41 @@ paths:
         "204":
           description: Deleted
 
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [users]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
+    CurrentUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        firstName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        imageUrl: { type: string, nullable: true }
+        role: { type: string, enum: [user, admin] }
+        status: { type: string, enum: [active, suspended] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, email, role, status, createdAt, updatedAt]
+
     HealthStatus:
       type: object
       properties:

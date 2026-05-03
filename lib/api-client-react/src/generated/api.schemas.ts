@@ -5,6 +5,34 @@
  * Science Compiler API specification
  * OpenAPI spec version: 0.1.0
  */
+export type CurrentUserRole =
+  (typeof CurrentUserRole)[keyof typeof CurrentUserRole];
+
+export const CurrentUserRole = {
+  user: "user",
+  admin: "admin",
+} as const;
+
+export type CurrentUserStatus =
+  (typeof CurrentUserStatus)[keyof typeof CurrentUserStatus];
+
+export const CurrentUserStatus = {
+  active: "active",
+  suspended: "suspended",
+} as const;
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  imageUrl?: string | null;
+  role: CurrentUserRole;
+  status: CurrentUserStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
