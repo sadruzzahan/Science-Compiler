@@ -136,8 +136,10 @@ export async function getCachedSynthesis(q: string): Promise<SynthesisResult | n
 
     if (rows.length === 0) return null;
     const row = rows[0];
+    // Treat as a cache miss (forcing re-synthesis) when expired, but DO NOT
+    // delete the row — share links are permanent, so the row must survive
+    // beyond the cache TTL for `getSynthesisByShareId` to keep working.
     if (row.expiresAt <= now) {
-      await db.delete(questionSynthesisTable).where(eq(questionSynthesisTable.id, row.id));
       return null;
     }
     // Always overlay the row's authoritative shareId so older cached payloads
@@ -196,8 +198,9 @@ export async function cacheSynthesis(result: SynthesisResult): Promise<string | 
 }
 
 /**
- * Look up a stored synthesis by its public share slug. Returns null if not
- * found or expired.
+ * Look up a stored synthesis by its public share slug. Share links are
+ * intentionally permanent — `expiresAt` controls the re-synthesis cache
+ * (see `getCachedSynthesis`) but does NOT gate share retrieval.
  */
 export async function getSynthesisByShareId(shareId: string): Promise<SynthesisResult | null> {
   try {
@@ -208,7 +211,6 @@ export async function getSynthesisByShareId(shareId: string): Promise<SynthesisR
       .limit(1);
     if (rows.length === 0) return null;
     const row = rows[0];
-    if (row.expiresAt <= new Date()) return null;
     return { ...(row.result as SynthesisResult), shareId: row.shareId, cached: true };
   } catch (err) {
     logger.warn({ err }, "getSynthesisByShareId DB error");
