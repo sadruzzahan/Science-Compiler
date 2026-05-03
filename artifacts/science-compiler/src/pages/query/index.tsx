@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import {
   useGetRecentActivity,
   getGetRecentActivityQueryKey,
@@ -338,6 +338,7 @@ function ShareButton({ shareId }: { shareId: string }) {
 
 export default function QueryPage() {
   const search = useSearch();
+  const [location, setLocation] = useLocation();
   const sharedId = new URLSearchParams(search).get("synthesis");
 
   const [inputValue, setInputValue] = useState("");
@@ -393,9 +394,7 @@ export default function QueryPage() {
     if (!q) return;
     // Submitting a new query supersedes any shared link.
     if (sharedId) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("synthesis");
-      window.history.replaceState({}, "", url.toString());
+      setLocation(location, { replace: true });
       setSharedResult(null);
     }
     setSubmittedQuery(q);
@@ -405,9 +404,7 @@ export default function QueryPage() {
     setSubmittedQuery(null);
     setInputValue("");
     if (sharedId) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("synthesis");
-      window.history.replaceState({}, "", url.toString());
+      setLocation(location, { replace: true });
       setSharedResult(null);
     }
   }
