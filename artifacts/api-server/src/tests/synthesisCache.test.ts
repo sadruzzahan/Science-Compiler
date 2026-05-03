@@ -5,6 +5,7 @@ import {
   getCachedSynthesis,
   cacheSynthesis,
   questionHash,
+  _resetSynthesisMemoryCacheForTests,
   type SynthesisResult,
 } from "../lib/synthesisEngine";
 
@@ -27,7 +28,12 @@ const MOCK_RESULT: SynthesisResult = {
 };
 
 describe("Synthesis DB cache", () => {
+  beforeEach(() => {
+    _resetSynthesisMemoryCacheForTests();
+  });
+
   afterEach(async () => {
+    _resetSynthesisMemoryCacheForTests();
     await db.delete(questionSynthesisTable).where(eq(questionSynthesisTable.questionHash, TEST_HASH));
   });
 

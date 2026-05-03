@@ -13,6 +13,16 @@ import { logger } from "./logger";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+interface MemoryCacheEntry {
+  result: SynthesisResult;
+  expiresAt: number;
+}
+const memoryCache = new Map<string, MemoryCacheEntry>();
+
+export function _resetSynthesisMemoryCacheForTests(): void {
+  memoryCache.clear();
+}
+
 export interface EvidenceItem {
   claimId: number;
   claimText: string;
@@ -93,8 +103,17 @@ export function questionHash(q: string): string {
 
 export async function getCachedSynthesis(q: string): Promise<SynthesisResult | null> {
   const hash = questionHash(q);
-  const now = new Date();
+  const nowMs = Date.now();
 
+  const memEntry = memoryCache.get(hash);
+  if (memEntry) {
+    if (memEntry.expiresAt > nowMs) {
+      return { ...memEntry.result, cached: true };
+    }
+    memoryCache.delete(hash);
+  }
+
+  const now = new Date(nowMs);
   try {
     const rows = await db
       .select()
@@ -108,7 +127,12 @@ export async function getCachedSynthesis(q: string): Promise<SynthesisResult | n
       await db.delete(questionSynthesisTable).where(eq(questionSynthesisTable.id, row.id));
       return null;
     }
-    return { ...(row.result as SynthesisResult), cached: true };
+    const result = { ...(row.result as SynthesisResult), cached: true };
+    memoryCache.set(hash, {
+      result: { ...result, cached: false },
+      expiresAt: row.expiresAt.getTime(),
+    });
+    return result;
   } catch (err) {
     logger.warn({ err }, "getCachedSynthesis DB error (non-fatal)");
     return null;
@@ -116,8 +140,12 @@ export async function getCachedSynthesis(q: string): Promise<SynthesisResult | n
 }
 
 export async function cacheSynthesis(result: SynthesisResult): Promise<void> {
-  const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
+  const expiresAtMs = Date.now() + CACHE_TTL_MS;
+  const expiresAt = new Date(expiresAtMs);
   const toStore = { ...result, cached: false };
+
+  memoryCache.set(result.questionHash, { result: toStore, expiresAt: expiresAtMs });
+
   try {
     await db
       .insert(questionSynthesisTable)
