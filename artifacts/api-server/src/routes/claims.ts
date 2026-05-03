@@ -196,14 +196,17 @@ router.patch("/claims/:id", requireUser, async (req, res): Promise<void> => {
   const body = UpdateClaimBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const updates = stripClaim(body.data);
+  // Detect whether the client is updating claimText at all (presence-based,
+  // not truthiness — an empty string is still a change worth invalidating).
+  const claimTextChanged = Object.prototype.hasOwnProperty.call(body.data, "claimText");
   // If claim text is changing, null the existing embedding immediately so a
   // failed re-embed doesn't leave a stale vector in place.
-  if (body.data.claimText) {
+  if (claimTextChanged) {
     (updates as Record<string, unknown>).embedding = null;
   }
   const [claim] = await db.update(claimsTable).set(updates).where(eq(claimsTable.id, id)).returning();
   if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
-  if (body.data.claimText) void embedAndStoreClaim(claim.id, claim.claimText);
+  if (claimTextChanged && claim.claimText) void embedAndStoreClaim(claim.id, claim.claimText);
   res.json({ ...claim, embedding: undefined, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
 });
 
