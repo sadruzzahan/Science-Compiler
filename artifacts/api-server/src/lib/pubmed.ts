@@ -25,7 +25,10 @@ function buildUrl(endpoint: string, params: Record<string, string | number>): st
 }
 
 export async function searchPubMed(query: string, maxResults: number = 10): Promise<string[]> {
-  const url = buildUrl("esearch", { term: query, retmax: maxResults, sort: "pub_date" });
+  const oaQuery = query.toLowerCase().includes("free full text")
+    ? query
+    : `(${query}) AND free full text[sb]`;
+  const url = buildUrl("esearch", { term: oaQuery, retmax: maxResults, sort: "pub_date" });
   const res = await fetch(url);
   if (!res.ok) throw new Error(`PubMed esearch failed: ${res.status}`);
   const data = await res.json() as { esearchresult?: { idlist?: string[] } };

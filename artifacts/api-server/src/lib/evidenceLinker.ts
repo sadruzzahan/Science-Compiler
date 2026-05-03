@@ -55,7 +55,7 @@ export async function linkEvidence(
       contradictionExplanation: isContradicting
         ? `New ingested paper claims opposite direction (${newClaim.direction} vs ${existing.direction}).`
         : null,
-    });
+    }).onConflictDoNothing();
 
     await refreshClaimSynthesis(existing.id, topicId);
   }

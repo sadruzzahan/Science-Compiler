@@ -1,5 +1,9 @@
-import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
+
+async function getOpenAI() {
+  const { openai } = await import("@workspace/integrations-openai-ai-server");
+  return openai;
+}
 
 export interface ExtractedClaim {
   claimText: string;
@@ -42,6 +46,7 @@ export async function extractClaims(paperText: PaperText | string, model: string
     ? `ABSTRACT:\n${paperText}`
     : buildInputText(paperText);
 
+  const openai = await getOpenAI();
   const response = await openai.chat.completions.create({
     model,
     max_completion_tokens: 2000,

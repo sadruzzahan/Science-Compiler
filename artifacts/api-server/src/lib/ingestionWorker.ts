@@ -1,10 +1,14 @@
 import { db, topicsTable, papersTable, claimsTable, ingestionRunsTable, ingestionConfigsTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { searchPubMed, fetchPubMedPapers } from "./pubmed";
 import { extractClaims } from "./claimExtractor";
 import { linkEvidence, refreshClaimSynthesis } from "./evidenceLinker";
-import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 import { logger } from "./logger";
+
+async function getBatchProcess() {
+  const { batchProcess } = await import("@workspace/integrations-openai-ai-server/batch");
+  return batchProcess;
+}
 
 export interface IngestionResult {
   runId: number;
@@ -86,6 +90,7 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
       await new Promise(r => setTimeout(r, 500));
       const papers = await fetchPubMedPapers(newPmids);
 
+      const batchProcess = await getBatchProcess();
       await batchProcess(
         papers,
         async (paper) => {
@@ -117,6 +122,20 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
             );
 
             for (const claim of claims) {
+              const existing = await db.select({ id: claimsTable.id })
+                .from(claimsTable)
+                .where(and(
+                  eq(claimsTable.paperId, insertedPaper.id),
+                  eq(claimsTable.direction, claim.direction),
+                  eq(claimsTable.population, claim.population),
+                ))
+                .limit(1);
+
+              if (existing.length > 0) {
+                logger.debug({ claimText: claim.claimText, paperId: insertedPaper.id }, "Skipping duplicate claim");
+                continue;
+              }
+
               const [insertedClaim] = await db.insert(claimsTable).values({
                 topicId: config.topicId,
                 paperId: insertedPaper.id,
