@@ -52,7 +52,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - `synthesizeQuestion(evidence, onToken)` — GPT-4o-mini JSON-mode streaming synthesis
   - `verifyClaimText(claim)` — non-streaming LLM claim verification
   - `buildContradictionMap(claimId)` — lazy LLM explanation of contradicting evidence pairs
-  - `getCachedSynthesis` / `cacheSynthesis` — 24-hour in-memory cache keyed by question hash
+  - `getCachedSynthesis` / `cacheSynthesis` — 24-hour DB cache in `question_synthesis` table (normalized question hash key, JSONB result, expiresAt TTL); `question_synthesis` is a dedicated table separate from `claim_synthesis` (which stores per-claim synthesis). Schema applied via `pnpm --filter @workspace/db run push`.
 - New API routes in `routes/query.ts`:
   - `GET /api/query/synthesize?q=...` — SSE streaming endpoint (token-by-token + final result event)
   - `POST /api/query/verify {claim}` — returns verdict/confidence/evidence summaries
