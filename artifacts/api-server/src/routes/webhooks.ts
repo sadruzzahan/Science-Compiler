@@ -19,6 +19,9 @@ interface ClerkUserData {
   last_name?: string | null;
   image_url?: string | null;
   last_sign_in_at?: number | null;
+  // Session events carry the Clerk user id under `user_id`, not `id`
+  // (which is the session id).
+  user_id?: string;
 }
 
 function primaryEmail(data: ClerkUserData): string {
@@ -62,7 +65,11 @@ router.post(
     }
 
     const data = evt.data;
-    if (!data?.id) {
+    // For user.* events, data.id is the Clerk user id. For session.* events,
+    // data.id is the session id and the user id is at data.user_id.
+    const isSessionEvent = evt.type.startsWith("session.");
+    const clerkUserId = isSessionEvent ? data.user_id : data.id;
+    if (!clerkUserId) {
       res.status(400).json({ error: "Missing user id" });
       return;
     }
@@ -71,8 +78,9 @@ router.post(
       if (evt.type === "user.created" || evt.type === "user.updated") {
         const email = primaryEmail(data);
         const role = adminEmails().includes(email.toLowerCase()) ? "admin" : "user";
-        const [existing] = await db.select().from(usersTable).where(eq(usersTable.clerkId, data.id)).limit(1);
+        const [existing] = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkUserId)).limit(1);
         if (existing) {
+          const willPromote = role === "admin" && existing.role !== "admin";
           await db
             .update(usersTable)
             .set({
@@ -85,25 +93,40 @@ router.post(
               lastSignInAt: data.last_sign_in_at ? new Date(data.last_sign_in_at) : existing.lastSignInAt,
             })
             .where(eq(usersTable.id, existing.id));
+          if (willPromote) {
+            logger.info(
+              { userId: existing.id, clerkUserId, email, source: "clerk_webhook" },
+              "User promoted to admin via Clerk webhook + ADMIN_EMAILS allowlist",
+            );
+          }
         } else {
-          await db.insert(usersTable).values({
-            clerkId: data.id,
-            email,
-            firstName: data.first_name ?? null,
-            lastName: data.last_name ?? null,
-            imageUrl: data.image_url ?? null,
-            role,
-            status: "active",
-            lastSignInAt: data.last_sign_in_at ? new Date(data.last_sign_in_at) : null,
-          });
+          const [created] = await db
+            .insert(usersTable)
+            .values({
+              clerkId: clerkUserId,
+              email,
+              firstName: data.first_name ?? null,
+              lastName: data.last_name ?? null,
+              imageUrl: data.image_url ?? null,
+              role,
+              status: "active",
+              lastSignInAt: data.last_sign_in_at ? new Date(data.last_sign_in_at) : null,
+            })
+            .returning();
+          if (created && role === "admin") {
+            logger.info(
+              { userId: created.id, clerkUserId, email, source: "clerk_webhook" },
+              "User created as admin via Clerk webhook + ADMIN_EMAILS allowlist",
+            );
+          }
         }
       } else if (evt.type === "user.deleted") {
-        await db.delete(usersTable).where(eq(usersTable.clerkId, data.id));
-      } else if (evt.type === "session.created" && data.id) {
+        await db.delete(usersTable).where(eq(usersTable.clerkId, clerkUserId));
+      } else if (evt.type === "session.created") {
         await db
           .update(usersTable)
           .set({ lastSignInAt: new Date() })
-          .where(eq(usersTable.clerkId, data.id));
+          .where(eq(usersTable.clerkId, clerkUserId));
       }
       res.json({ ok: true });
     } catch (err) {

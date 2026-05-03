@@ -29,7 +29,29 @@ async function loadUser(req: Request): Promise<User | null> {
   if (!clerkUserId) return null;
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkUserId)).limit(1);
-  if (user) return user;
+  if (user) {
+    // Re-evaluate ADMIN_EMAILS allowlist for existing users so changes to
+    // ADMIN_EMAILS take effect on next sign-in without waiting for a webhook.
+    if (user.role !== "admin" && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+      try {
+        const [promoted] = await db
+          .update(usersTable)
+          .set({ role: "admin" })
+          .where(eq(usersTable.id, user.id))
+          .returning();
+        if (promoted) {
+          logger.info(
+            { userId: promoted.id, clerkUserId, email: promoted.email, source: "ADMIN_EMAILS_allowlist" },
+            "Existing user promoted to admin via ADMIN_EMAILS allowlist",
+          );
+          return promoted;
+        }
+      } catch (err) {
+        logger.error({ err, userId: user.id }, "Failed to promote existing user to admin");
+      }
+    }
+    return user;
+  }
 
   // First-time user just signed in but webhook hasn't fired yet — JIT provision.
   try {
@@ -93,8 +115,10 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
     const user = await loadUser(req);
     if (user) req.currentUser = user;
   }
+  // Per acceptance criteria, /api/admin/* returns 403 FORBIDDEN for any
+  // non-admin caller (including anonymous), not 401 UNAUTHENTICATED.
   if (!req.currentUser) {
-    sendUnauthenticated(res);
+    sendForbidden(res, "Admin access required");
     return;
   }
   if (req.currentUser.status === "suspended") {

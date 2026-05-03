@@ -79,6 +79,15 @@ describe("auth middleware", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("requireAdmin returns 403 (not 401) when caller is anonymous", async () => {
+    (getAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ userId: null });
+    const { req, res, next, status, json } = makeReqRes();
+    await requireAdmin(req, res, next);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith({ code: "FORBIDDEN", error: "Admin access required" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("requireAdmin calls next when user is admin", async () => {
     const { req, res, next } = makeReqRes();
     req.currentUser = makeUser({ role: "admin" });
