@@ -56,6 +56,7 @@ describe("Synthesis DB cache", () => {
     const pastDate = new Date(Date.now() - 1000);
     await db.insert(questionSynthesisTable).values({
       questionHash: TEST_HASH,
+      shareId: "expired1",
       question: TEST_QUESTION,
       result: MOCK_RESULT,
       expiresAt: pastDate,
@@ -70,5 +71,21 @@ describe("Synthesis DB cache", () => {
     await cacheSynthesis(updated);
     const retrieved = await getCachedSynthesis(TEST_QUESTION);
     expect(retrieved!.synthesisText).toBe("Updated synthesis.");
+  });
+
+  it("assigns a stable shareId on first cache and preserves it across upserts", async () => {
+    _resetSynthesisMemoryCacheForTests();
+    const first: SynthesisResult = { ...MOCK_RESULT };
+    await cacheSynthesis(first);
+    const firstShareId = first.shareId;
+    expect(firstShareId).toMatch(/^[A-Za-z0-9]{8}$/);
+
+    _resetSynthesisMemoryCacheForTests();
+    const second: SynthesisResult = { ...MOCK_RESULT, synthesisText: "Updated" };
+    await cacheSynthesis(second);
+    expect(second.shareId).toBe(firstShareId);
+
+    const retrieved = await getCachedSynthesis(TEST_QUESTION);
+    expect(retrieved!.shareId).toBe(firstShareId);
   });
 });

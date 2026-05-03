@@ -46,6 +46,7 @@ import type {
   QueryResult,
   RecentActivity,
   Study,
+  SynthesisResult,
   SynthesizeQuestionParams,
   Topic,
   TopicDetail,
@@ -2559,6 +2560,98 @@ export function useSynthesizeQuestion<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getSynthesizeQuestionQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a stored synthesis result keyed by the short slug emitted in
+the SSE `result` event. Public on purpose — anyone with the link can view.
+
+ * @summary Fetch a previously synthesized result by its share id (public)
+ */
+export const getGetSharedSynthesisUrl = (shareId: string) => {
+  return `/api/synthesis/${shareId}`;
+};
+
+export const getSharedSynthesis = async (
+  shareId: string,
+  options?: RequestInit,
+): Promise<SynthesisResult> => {
+  return customFetch<SynthesisResult>(getGetSharedSynthesisUrl(shareId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSharedSynthesisQueryKey = (shareId: string) => {
+  return [`/api/synthesis/${shareId}`] as const;
+};
+
+export const getGetSharedSynthesisQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSharedSynthesis>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  shareId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSharedSynthesis>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSharedSynthesisQueryKey(shareId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSharedSynthesis>>
+  > = ({ signal }) =>
+    getSharedSynthesis(shareId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!shareId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSharedSynthesis>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSharedSynthesisQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSharedSynthesis>>
+>;
+export type GetSharedSynthesisQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Fetch a previously synthesized result by its share id (public)
+ */
+
+export function useGetSharedSynthesis<
+  TData = Awaited<ReturnType<typeof getSharedSynthesis>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  shareId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSharedSynthesis>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSharedSynthesisQueryOptions(shareId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

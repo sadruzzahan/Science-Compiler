@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   useGetRecentActivity,
   getGetRecentActivityQueryKey,
   useVerifyClaim,
+  getSharedSynthesis,
   type VerifyResult,
 } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,8 @@ import {
   Sparkles,
   ShieldCheck,
   Loader2,
+  Share2,
+  Check,
 } from "lucide-react";
 import { ConsensusBadge, EvidenceQualityBadge } from "@/components/badges";
 
@@ -45,6 +48,7 @@ interface StudySummary {
 interface SynthesisResult {
   question: string;
   questionHash: string;
+  shareId?: string;
   consensusStatus: string;
   synthesisText: string;
   moderatingVariables: string[];
@@ -304,25 +308,106 @@ function VerifySection() {
   );
 }
 
+function ShareButton({ shareId }: { shareId: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleShare() {
+    const url = `${window.location.origin}${window.location.pathname}?synthesis=${shareId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", url);
+    }
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleShare}
+      data-testid="button-share-synthesis"
+    >
+      {copied ? (
+        <><Check className="mr-2 h-3 w-3" />Link copied</>
+      ) : (
+        <><Share2 className="mr-2 h-3 w-3" />Share</>
+      )}
+    </Button>
+  );
+}
+
 export default function QueryPage() {
+  const search = useSearch();
+  const sharedId = new URLSearchParams(search).get("synthesis");
+
   const [inputValue, setInputValue] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
+  const [sharedResult, setSharedResult] = useState<SynthesisResult | null>(null);
+  const [sharedLoading, setSharedLoading] = useState(false);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+
+  // Load shared synthesis from ?synthesis=xxx URL param.
+  useEffect(() => {
+    if (!sharedId) {
+      setSharedResult(null);
+      setSharedError(null);
+      return;
+    }
+    setSharedLoading(true);
+    setSharedError(null);
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSharedSynthesis(sharedId);
+        if (!cancelled) {
+          setSharedResult(data as SynthesisResult);
+          setSubmittedQuery((data as SynthesisResult).question);
+        }
+      } catch {
+        if (!cancelled) setSharedError("This shared synthesis could not be found or has expired.");
+      } finally {
+        if (!cancelled) setSharedLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sharedId]);
 
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity({
     query: { queryKey: getGetRecentActivityQueryKey() },
   });
 
-  const { phase, partialText, result, error } = useSynthesis(submittedQuery);
+  // When viewing a shared synthesis, skip the streaming hook entirely.
+  const liveSynthesis = useSynthesis(sharedId ? null : submittedQuery);
+  const phase: SynthesisPhase = sharedId
+    ? sharedLoading ? "streaming" : sharedError ? "error" : sharedResult ? "done" : "idle"
+    : liveSynthesis.phase;
+  const partialText = sharedId ? "" : liveSynthesis.partialText;
+  const result = sharedId ? sharedResult : liveSynthesis.result;
+  const error = sharedId ? sharedError : liveSynthesis.error;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const q = inputValue.trim();
-    if (q) setSubmittedQuery(q);
+    if (!q) return;
+    // Submitting a new query supersedes any shared link.
+    if (sharedId) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("synthesis");
+      window.history.replaceState({}, "", url.toString());
+      setSharedResult(null);
+    }
+    setSubmittedQuery(q);
   }
 
   function handleClear() {
     setSubmittedQuery(null);
     setInputValue("");
+    if (sharedId) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("synthesis");
+      window.history.replaceState({}, "", url.toString());
+      setSharedResult(null);
+    }
   }
 
   const exampleQueries = [
@@ -549,6 +634,7 @@ export default function QueryPage() {
                         Browse related claims <ArrowRight className="ml-2 h-3 w-3" />
                       </Button>
                     </Link>
+                    {result.shareId && <ShareButton shareId={result.shareId} />}
                   </div>
                 </CardContent>
               </Card>

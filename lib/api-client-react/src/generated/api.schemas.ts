@@ -634,6 +634,38 @@ export interface VerifyClaimBody {
   claim: string;
 }
 
+export interface StudySummary {
+  claimText: string;
+  direction: string;
+  methodologyType: string;
+  evidenceQuality: string;
+  /** @nullable */
+  effectSize?: number | null;
+  /** @nullable */
+  effectSizeUnit?: string | null;
+  /** @nullable */
+  sampleSize?: number | null;
+  population: string;
+  paperTitle: string;
+  paperYear: number;
+}
+
+export interface SynthesisResult {
+  question: string;
+  questionHash: string;
+  shareId?: string;
+  consensusStatus: string;
+  synthesisText: string;
+  moderatingVariables: string[];
+  methodologicalConcerns: string[];
+  uncertaintyScore: number;
+  temporalTrend: string;
+  supportingStudies: StudySummary[];
+  contradictingStudies: StudySummary[];
+  totalEvidence: number;
+  cached: boolean;
+}
+
 export interface VerifyResult {
   claim: string;
   verdict: string;

@@ -9,8 +9,15 @@ import {
 } from "@workspace/db";
 import { eq, or, ilike, inArray, sql, and, lt, isNotNull } from "drizzle-orm";
 import { createHash } from "crypto";
+import { customAlphabet } from "nanoid";
 import { logger } from "./logger";
 import { embedText, toVectorLiteral } from "./embeddings";
+
+// URL-safe, unambiguous alphabet (no 0/O/1/l/I); 8 chars => ~47 bits entropy.
+const generateShareId = customAlphabet(
+  "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ",
+  8,
+);
 
 const VECTOR_TOP_K = 20;
 const VECTOR_MAX_DISTANCE = 0.6;
@@ -58,6 +65,8 @@ export interface StudySummary {
 export interface SynthesisResult {
   question: string;
   questionHash: string;
+  /** Short opaque slug used in shareable URLs (e.g. /?synthesis=abc12345). */
+  shareId?: string;
   consensusStatus: string;
   synthesisText: string;
   moderatingVariables: string[];
@@ -131,7 +140,9 @@ export async function getCachedSynthesis(q: string): Promise<SynthesisResult | n
       await db.delete(questionSynthesisTable).where(eq(questionSynthesisTable.id, row.id));
       return null;
     }
-    const result = { ...(row.result as SynthesisResult), cached: true };
+    // Always overlay the row's authoritative shareId so older cached payloads
+    // that pre-date the share feature still get one.
+    const result = { ...(row.result as SynthesisResult), shareId: row.shareId, cached: true };
     memoryCache.set(hash, {
       result: { ...result, cached: false },
       expiresAt: row.expiresAt.getTime(),
@@ -143,28 +154,65 @@ export async function getCachedSynthesis(q: string): Promise<SynthesisResult | n
   }
 }
 
-export async function cacheSynthesis(result: SynthesisResult): Promise<void> {
+/**
+ * Persist a synthesis result. Mutates `result` in place to attach the
+ * generated/looked-up `shareId` so callers can surface it immediately.
+ * Returns the assigned shareId (best-effort — undefined if DB write failed
+ * AND no prior shareId was attached).
+ */
+export async function cacheSynthesis(result: SynthesisResult): Promise<string | undefined> {
   const expiresAtMs = Date.now() + CACHE_TTL_MS;
   const expiresAt = new Date(expiresAtMs);
-  const toStore = { ...result, cached: false };
-
-  memoryCache.set(result.questionHash, { result: toStore, expiresAt: expiresAtMs });
+  const newShareId = result.shareId ?? generateShareId();
+  const toStore = { ...result, shareId: newShareId, cached: false };
 
   try {
-    await db
+    const [row] = await db
       .insert(questionSynthesisTable)
       .values({
         questionHash: result.questionHash,
+        shareId: newShareId,
         question: result.question,
         result: toStore,
         expiresAt,
       })
       .onConflictDoUpdate({
         target: questionSynthesisTable.questionHash,
+        // Preserve the original shareId on conflict so stale links keep working.
         set: { result: toStore, expiresAt, createdAt: new Date() },
-      });
+      })
+      .returning({ shareId: questionSynthesisTable.shareId });
+
+    const finalShareId = row?.shareId ?? newShareId;
+    result.shareId = finalShareId;
+    toStore.shareId = finalShareId;
+    memoryCache.set(result.questionHash, { result: toStore, expiresAt: expiresAtMs });
+    return finalShareId;
   } catch (err) {
     logger.warn({ err }, "cacheSynthesis DB error (non-fatal)");
+    memoryCache.set(result.questionHash, { result: toStore, expiresAt: expiresAtMs });
+    return result.shareId;
+  }
+}
+
+/**
+ * Look up a stored synthesis by its public share slug. Returns null if not
+ * found or expired.
+ */
+export async function getSynthesisByShareId(shareId: string): Promise<SynthesisResult | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(questionSynthesisTable)
+      .where(eq(questionSynthesisTable.shareId, shareId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    if (row.expiresAt <= new Date()) return null;
+    return { ...(row.result as SynthesisResult), shareId: row.shareId, cached: true };
+  } catch (err) {
+    logger.warn({ err }, "getSynthesisByShareId DB error");
+    return null;
   }
 }
 

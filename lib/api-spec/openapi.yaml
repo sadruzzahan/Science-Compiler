@@ -652,6 +652,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /synthesis/{shareId}:
+    get:
+      operationId: getSharedSynthesis
+      tags: [synthesis]
+      summary: Fetch a previously synthesized result by its share id (public)
+      description: |
+        Returns a stored synthesis result keyed by the short slug emitted in
+        the SSE `result` event. Public on purpose — anyone with the link can view.
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stored synthesis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SynthesisResult"
+        "400":
+          description: Invalid share id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /query/verify:
     post:
       operationId: verifyClaim
@@ -1940,6 +1974,66 @@ components:
         claim:
           type: string
       required: [claim]
+
+    StudySummary:
+      type: object
+      properties:
+        claimText: { type: string }
+        direction: { type: string }
+        methodologyType: { type: string }
+        evidenceQuality: { type: string }
+        effectSize: { type: ["number", "null"] }
+        effectSizeUnit: { type: ["string", "null"] }
+        sampleSize: { type: ["integer", "null"] }
+        population: { type: string }
+        paperTitle: { type: string }
+        paperYear: { type: integer }
+      required:
+        - claimText
+        - direction
+        - methodologyType
+        - evidenceQuality
+        - population
+        - paperTitle
+        - paperYear
+
+    SynthesisResult:
+      type: object
+      properties:
+        question: { type: string }
+        questionHash: { type: string }
+        shareId: { type: string }
+        consensusStatus: { type: string }
+        synthesisText: { type: string }
+        moderatingVariables:
+          type: array
+          items: { type: string }
+        methodologicalConcerns:
+          type: array
+          items: { type: string }
+        uncertaintyScore: { type: integer }
+        temporalTrend: { type: string }
+        supportingStudies:
+          type: array
+          items: { $ref: "#/components/schemas/StudySummary" }
+        contradictingStudies:
+          type: array
+          items: { $ref: "#/components/schemas/StudySummary" }
+        totalEvidence: { type: integer }
+        cached: { type: boolean }
+      required:
+        - question
+        - questionHash
+        - consensusStatus
+        - synthesisText
+        - moderatingVariables
+        - methodologicalConcerns
+        - uncertaintyScore
+        - temporalTrend
+        - supportingStudies
+        - contradictingStudies
+        - totalEvidence
+        - cached
 
     VerifyResult:
       type: object

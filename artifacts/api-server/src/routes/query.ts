@@ -9,6 +9,7 @@ import {
   buildContradictionMap,
   getCachedSynthesis,
   cacheSynthesis,
+  getSynthesisByShareId,
 } from "../lib/synthesisEngine";
 import { requireUser } from "../middlewares/auth";
 
@@ -333,7 +334,8 @@ router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => 
       if (!closed) writeEvent("token", token);
     });
 
-    cacheSynthesis(result);
+    // Await so the persisted shareId is attached to `result` before we emit it.
+    await cacheSynthesis(result);
     writeEvent("result", result);
     res.end();
   } catch (err) {
@@ -343,6 +345,24 @@ router.get("/query/synthesize", requireUser, async (req, res): Promise<void> => 
       res.end();
     }
   }
+});
+
+// Public — anyone with the link can view a stored synthesis (that's the
+// whole point of "shareable"). Auth is intentionally NOT required.
+router.get("/synthesis/:shareId", async (req, res): Promise<void> => {
+  const raw = typeof req.params.shareId === "string" ? req.params.shareId : "";
+  // Restrict to the nanoid alphabet we generate; rejects path traversal,
+  // SQLi probes, and anything that's clearly not one of our slugs.
+  if (!/^[A-Za-z0-9]{4,32}$/.test(raw)) {
+    res.status(400).json({ error: "Invalid share id" });
+    return;
+  }
+  const result = await getSynthesisByShareId(raw);
+  if (!result) {
+    res.status(404).json({ error: "Synthesis not found or expired" });
+    return;
+  }
+  res.json(result);
 });
 
 router.post("/query/verify", requireUser, async (req, res): Promise<void> => {

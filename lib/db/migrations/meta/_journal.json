@@ -29,6 +29,13 @@
       "when": 1777773342761,
       "tag": "0003_slimy_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777795192707,
+      "tag": "0004_tidy_tarot",
+      "breakpoints": true
     }
   ]
 }

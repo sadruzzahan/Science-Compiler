@@ -878,6 +878,58 @@ export const SynthesizeQuestionQueryParams = zod.object({
 });
 
 /**
+ * Returns a stored synthesis result keyed by the short slug emitted in
+the SSE `result` event. Public on purpose — anyone with the link can view.
+
+ * @summary Fetch a previously synthesized result by its share id (public)
+ */
+export const GetSharedSynthesisParams = zod.object({
+  shareId: zod.coerce.string(),
+});
+
+export const GetSharedSynthesisResponse = zod.object({
+  question: zod.string(),
+  questionHash: zod.string(),
+  shareId: zod.string().optional(),
+  consensusStatus: zod.string(),
+  synthesisText: zod.string(),
+  moderatingVariables: zod.array(zod.string()),
+  methodologicalConcerns: zod.array(zod.string()),
+  uncertaintyScore: zod.number(),
+  temporalTrend: zod.string(),
+  supportingStudies: zod.array(
+    zod.object({
+      claimText: zod.string(),
+      direction: zod.string(),
+      methodologyType: zod.string(),
+      evidenceQuality: zod.string(),
+      effectSize: zod.number().nullish(),
+      effectSizeUnit: zod.string().nullish(),
+      sampleSize: zod.number().nullish(),
+      population: zod.string(),
+      paperTitle: zod.string(),
+      paperYear: zod.number(),
+    }),
+  ),
+  contradictingStudies: zod.array(
+    zod.object({
+      claimText: zod.string(),
+      direction: zod.string(),
+      methodologyType: zod.string(),
+      evidenceQuality: zod.string(),
+      effectSize: zod.number().nullish(),
+      effectSizeUnit: zod.string().nullish(),
+      sampleSize: zod.number().nullish(),
+      population: zod.string(),
+      paperTitle: zod.string(),
+      paperYear: zod.number(),
+    }),
+  ),
+  totalEvidence: zod.number(),
+  cached: zod.boolean(),
+});
+
+/**
  * @summary Verify a plain-text claim against the knowledge base
  */
 export const VerifyClaimBody = zod.object({
