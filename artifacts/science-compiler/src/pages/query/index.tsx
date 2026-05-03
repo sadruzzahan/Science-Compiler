@@ -436,14 +436,23 @@ export default function QueryPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-6 mb-8 p-5 rounded-lg border bg-card">
-        <StatCard label="Topics" value={activity?.stats.totalTopics} isLoading={activityLoading} />
-        <StatCard label="Claims" value={activity?.stats.totalClaims} isLoading={activityLoading} />
-        <StatCard label="Papers" value={activity?.stats.totalPapers} isLoading={activityLoading} />
-        <StatCard label="Studies" value={activity?.stats.totalStudies} isLoading={activityLoading} />
-      </div>
+      {!sharedId && (
+        <div className="grid grid-cols-4 gap-6 mb-8 p-5 rounded-lg border bg-card">
+          <StatCard label="Topics" value={activity?.stats.totalTopics} isLoading={activityLoading} />
+          <StatCard label="Claims" value={activity?.stats.totalClaims} isLoading={activityLoading} />
+          <StatCard label="Papers" value={activity?.stats.totalPapers} isLoading={activityLoading} />
+          <StatCard label="Studies" value={activity?.stats.totalStudies} isLoading={activityLoading} />
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} className="mb-4">
+      {sharedId && (
+        <div className="mb-6 p-3 rounded-md border bg-muted/40 text-sm text-muted-foreground flex items-center justify-between" data-testid="shared-banner">
+          <span>You're viewing a shared synthesis result.</span>
+          <Link href="/" className="text-foreground hover:underline">Ask your own question →</Link>
+        </div>
+      )}
+
+      {!sharedId && <form onSubmit={handleSubmit} className="mb-4">
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -469,7 +478,7 @@ export default function QueryPage() {
             )}
           </Button>
         </div>
-      </form>
+      </form>}
 
       {!isActive && (
         <div className="flex flex-wrap gap-2 mb-10">
