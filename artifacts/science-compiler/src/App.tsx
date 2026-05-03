@@ -67,7 +67,7 @@ function ClerkBridge() {
 // open them while signed out.
 function QueryRoute() {
   const search = useSearch();
-  const hasShare = new URLSearchParams(search).has("synthesis");
+  const hasShare = !!new URLSearchParams(search).get("synthesis")?.trim();
   if (hasShare) return <QueryPage />;
   return (
     <RequireAuth>

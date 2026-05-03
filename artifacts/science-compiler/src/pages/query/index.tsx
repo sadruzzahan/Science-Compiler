@@ -372,8 +372,10 @@ export default function QueryPage() {
     return () => { cancelled = true; };
   }, [sharedId]);
 
+  // Skip the auth-protected recent-activity fetch when viewing a shared link
+  // so signed-out recipients don't trigger noisy 401s.
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity({
-    query: { queryKey: getGetRecentActivityQueryKey() },
+    query: { queryKey: getGetRecentActivityQueryKey(), enabled: !sharedId },
   });
 
   // When viewing a shared synthesis, skip the streaming hook entirely.
