@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, studiesTable } from "@workspace/db";
 import { GetStudyParams, GetStudyResponse, CreateStudyBody, UpdateStudyBody } from "@workspace/api-zod";
+import { requireUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -39,14 +40,14 @@ function stripStudy(d: Record<string, unknown>): Partial<StudyInsert> {
   return out as Partial<StudyInsert>;
 }
 
-router.post("/studies", async (req, res): Promise<void> => {
+router.post("/studies", requireUser, async (req, res): Promise<void> => {
   const body = CreateStudyBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [study] = await db.insert(studiesTable).values(stripStudy(body.data) as StudyInsert).returning();
   res.status(201).json({ ...study, createdAt: study!.createdAt.toISOString(), updatedAt: study!.updatedAt.toISOString() });
 });
 
-router.patch("/studies/:id", async (req, res): Promise<void> => {
+router.patch("/studies/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const body = UpdateStudyBody.safeParse(req.body);
@@ -56,7 +57,7 @@ router.patch("/studies/:id", async (req, res): Promise<void> => {
   res.json({ ...study, createdAt: study.createdAt.toISOString(), updatedAt: study.updatedAt.toISOString() });
 });
 
-router.delete("/studies/:id", async (req, res): Promise<void> => {
+router.delete("/studies/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const result = await db.delete(studiesTable).where(eq(studiesTable.id, id)).returning({ id: studiesTable.id });

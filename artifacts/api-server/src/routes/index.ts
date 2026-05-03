@@ -14,16 +14,21 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(usersRouter);
-// Public-read routes: gated by PUBLIC_READ_ENABLED. When the flag is "false",
-// these endpoints require an authenticated user.
-router.use(requirePublicReadOrUser);
-router.use(topicsRouter);
-router.use(papersRouter);
-router.use(claimsRouter);
-router.use(studiesRouter);
-router.use(evidenceLinksRouter);
+
+// Admin routes: gated solely by requireAdmin so anonymous/non-admin callers
+// always get 403 FORBIDDEN regardless of PUBLIC_READ_ENABLED.
+router.use("/admin", requireAdmin, adminRouter);
+
+// Authenticated-only routes (every handler in queryRouter already calls
+// requireUser; mounting it here avoids accidental public-read leakage).
 router.use(queryRouter);
-router.use("/admin", requireAdmin);
-router.use(adminRouter);
+
+// Public-read routes: gated per-router by PUBLIC_READ_ENABLED so the toggle
+// only affects intended public surfaces. When "false", these require auth.
+router.use(requirePublicReadOrUser, topicsRouter);
+router.use(requirePublicReadOrUser, papersRouter);
+router.use(requirePublicReadOrUser, claimsRouter);
+router.use(requirePublicReadOrUser, studiesRouter);
+router.use(requirePublicReadOrUser, evidenceLinksRouter);
 
 export default router;

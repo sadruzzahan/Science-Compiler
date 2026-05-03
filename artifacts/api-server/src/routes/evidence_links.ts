@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, type SQL } from "drizzle-orm";
 import { db, evidenceLinksTable } from "@workspace/db";
 import { CreateEvidenceLinkBody, UpdateEvidenceLinkBody, ListEvidenceLinksQueryParams } from "@workspace/api-zod";
+import { requireUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -25,14 +26,14 @@ function stripLink(d: Record<string, unknown>): Partial<EvidenceLinkInsert> {
   return out as Partial<EvidenceLinkInsert>;
 }
 
-router.post("/evidence-links", async (req, res): Promise<void> => {
+router.post("/evidence-links", requireUser, async (req, res): Promise<void> => {
   const body = CreateEvidenceLinkBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [link] = await db.insert(evidenceLinksTable).values(stripLink(body.data) as EvidenceLinkInsert).returning();
   res.status(201).json({ ...link, createdAt: link!.createdAt.toISOString() });
 });
 
-router.patch("/evidence-links/:id", async (req, res): Promise<void> => {
+router.patch("/evidence-links/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const body = UpdateEvidenceLinkBody.safeParse(req.body);
@@ -42,7 +43,7 @@ router.patch("/evidence-links/:id", async (req, res): Promise<void> => {
   res.json({ ...link, createdAt: link.createdAt.toISOString() });
 });
 
-router.delete("/evidence-links/:id", async (req, res): Promise<void> => {
+router.delete("/evidence-links/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const result = await db.delete(evidenceLinksTable).where(eq(evidenceLinksTable.id, id)).returning({ id: evidenceLinksTable.id });

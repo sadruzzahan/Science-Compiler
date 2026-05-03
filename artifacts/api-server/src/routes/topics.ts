@@ -12,6 +12,7 @@ import {
   UpdateTopicResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { requireUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -215,14 +216,14 @@ async function buildTopicResponse(topic: typeof topicsTable.$inferSelect) {
   };
 }
 
-router.post("/topics", async (req, res): Promise<void> => {
+router.post("/topics", requireUser, async (req, res): Promise<void> => {
   const body = CreateTopicBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [topic] = await db.insert(topicsTable).values(body.data).returning();
   res.status(201).json(UpdateTopicResponse.parse(await buildTopicResponse(topic!)));
 });
 
-router.patch("/topics/:id", async (req, res): Promise<void> => {
+router.patch("/topics/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const body = UpdateTopicBody.safeParse(req.body);
@@ -237,7 +238,7 @@ router.patch("/topics/:id", async (req, res): Promise<void> => {
   res.json(UpdateTopicResponse.parse(await buildTopicResponse(topic)));
 });
 
-router.delete("/topics/:id", async (req, res): Promise<void> => {
+router.delete("/topics/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const result = await db.delete(topicsTable).where(eq(topicsTable.id, id)).returning({ id: topicsTable.id });

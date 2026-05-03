@@ -10,6 +10,7 @@ import {
   UpdateClaimBody,
   GetClaimSynthesisResponse,
 } from "@workspace/api-zod";
+import { requireUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -180,14 +181,14 @@ function stripClaim(d: Record<string, unknown>): Partial<ClaimInsert> {
   return out as Partial<ClaimInsert>;
 }
 
-router.post("/claims", async (req, res): Promise<void> => {
+router.post("/claims", requireUser, async (req, res): Promise<void> => {
   const body = CreateClaimBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [claim] = await db.insert(claimsTable).values(stripClaim(body.data) as ClaimInsert).returning();
   res.status(201).json({ ...claim, createdAt: claim!.createdAt.toISOString(), updatedAt: claim!.updatedAt.toISOString() });
 });
 
-router.patch("/claims/:id", async (req, res): Promise<void> => {
+router.patch("/claims/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const body = UpdateClaimBody.safeParse(req.body);
@@ -197,7 +198,7 @@ router.patch("/claims/:id", async (req, res): Promise<void> => {
   res.json({ ...claim, createdAt: claim.createdAt.toISOString(), updatedAt: claim.updatedAt.toISOString() });
 });
 
-router.delete("/claims/:id", async (req, res): Promise<void> => {
+router.delete("/claims/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const result = await db.delete(claimsTable).where(eq(claimsTable.id, id)).returning({ id: claimsTable.id });

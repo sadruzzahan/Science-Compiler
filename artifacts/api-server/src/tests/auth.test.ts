@@ -22,7 +22,7 @@ vi.mock("@workspace/db", () => {
 
 import { getAuth } from "@clerk/express";
 import * as dbModule from "@workspace/db";
-import { requireUser, requireAdmin } from "../middlewares/auth";
+import { requireUser, requireAdmin, requirePublicReadOrUser } from "../middlewares/auth";
 import type { User } from "@workspace/db";
 
 function makeUser(over: Partial<User>): User {
@@ -93,6 +93,29 @@ describe("auth middleware", () => {
     req.currentUser = makeUser({ role: "admin" });
     await requireAdmin(req, res, next);
     expect(next).toHaveBeenCalled();
+  });
+
+  it("requirePublicReadOrUser passes through anonymous when PUBLIC_READ_ENABLED=true", async () => {
+    const prev = process.env.PUBLIC_READ_ENABLED;
+    process.env.PUBLIC_READ_ENABLED = "true";
+    (getAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ userId: null });
+    const { req, res, next, status } = makeReqRes();
+    await requirePublicReadOrUser(req, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(status).not.toHaveBeenCalled();
+    process.env.PUBLIC_READ_ENABLED = prev;
+  });
+
+  it("requirePublicReadOrUser rejects anonymous with 401 when PUBLIC_READ_ENABLED=false", async () => {
+    const prev = process.env.PUBLIC_READ_ENABLED;
+    process.env.PUBLIC_READ_ENABLED = "false";
+    (getAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ userId: null });
+    const { req, res, next, status, json } = makeReqRes();
+    await requirePublicReadOrUser(req, res, next);
+    expect(status).toHaveBeenCalledWith(401);
+    expect(json).toHaveBeenCalledWith({ code: "UNAUTHENTICATED", error: "Authentication required" });
+    expect(next).not.toHaveBeenCalled();
+    process.env.PUBLIC_READ_ENABLED = prev;
   });
 
   it("requireUser returns 403 for suspended account", async () => {

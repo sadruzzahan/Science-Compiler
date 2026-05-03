@@ -9,6 +9,7 @@ import {
   CreatePaperBody,
   UpdatePaperBody,
 } from "@workspace/api-zod";
+import { requireUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -112,14 +113,14 @@ function stripPaper(d: Record<string, unknown>): Partial<PaperInsert> {
   return out as Partial<PaperInsert>;
 }
 
-router.post("/papers", async (req, res): Promise<void> => {
+router.post("/papers", requireUser, async (req, res): Promise<void> => {
   const body = CreatePaperBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const [paper] = await db.insert(papersTable).values(stripPaper(body.data) as PaperInsert).returning();
   res.status(201).json({ ...paper, createdAt: paper!.createdAt.toISOString(), updatedAt: paper!.updatedAt.toISOString() });
 });
 
-router.patch("/papers/:id", async (req, res): Promise<void> => {
+router.patch("/papers/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const body = UpdatePaperBody.safeParse(req.body);
@@ -129,7 +130,7 @@ router.patch("/papers/:id", async (req, res): Promise<void> => {
   res.json({ ...paper, createdAt: paper.createdAt.toISOString(), updatedAt: paper.updatedAt.toISOString() });
 });
 
-router.delete("/papers/:id", async (req, res): Promise<void> => {
+router.delete("/papers/:id", requireUser, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
   const result = await db.delete(papersTable).where(eq(papersTable.id, id)).returning({ id: papersTable.id });
