@@ -20,37 +20,39 @@ export async function linkEvidence(
     and(eq(claimsTable.topicId, topicId))
   );
 
-  for (const existing of existingClaims) {
-    if (existing.id === newClaimId) continue;
+  const relatedClaims = existingClaims.filter(existing => {
+    if (existing.id === newClaimId) return false;
+    return claimsOverlap(newClaim.claimText, existing.claimText);
+  });
 
-    const semanticallyRelated = claimsOverlap(newClaim.claimText, existing.claimText);
-    if (!semanticallyRelated) continue;
+  if (relatedClaims.length === 0) return;
 
+  const [study] = await db.insert(studiesTable).values({
+    paperId,
+    topicId,
+    title: `Evidence from ingested paper: ${newClaim.claimText.slice(0, 60)}...`,
+    authors: "Via PubMed ingestion",
+    publicationYear: new Date().getFullYear(),
+    methodologyType: newClaim.methodologyType,
+    sampleSize: null,
+    effectSize: newClaim.effectSize,
+    effectSizeUnit: newClaim.effectSizeUnit,
+    ciLower: newClaim.ciLower,
+    ciUpper: newClaim.ciUpper,
+    pValue: null,
+    evidenceQuality: newClaim.evidenceQuality,
+    population: newClaim.population,
+    preregistered: 0,
+  }).returning();
+
+  for (const existing of relatedClaims) {
     const opposites = DIRECTION_OPPOSITES[newClaim.direction] ?? [];
     const isContradicting = opposites.includes(existing.direction);
     const linkDirection = isContradicting ? "contradicting" : "supporting";
 
-    const study = await db.insert(studiesTable).values({
-      paperId,
-      topicId,
-      title: `Evidence from ingested paper: ${newClaim.claimText.slice(0, 60)}...`,
-      authors: "Via PubMed ingestion",
-      publicationYear: new Date().getFullYear(),
-      methodologyType: newClaim.methodologyType,
-      sampleSize: null,
-      effectSize: newClaim.effectSize,
-      effectSizeUnit: newClaim.effectSizeUnit,
-      ciLower: newClaim.ciLower,
-      ciUpper: newClaim.ciUpper,
-      pValue: null,
-      evidenceQuality: newClaim.evidenceQuality,
-      population: newClaim.population,
-      preregistered: 0,
-    }).returning();
-
     await db.insert(evidenceLinksTable).values({
       claimId: existing.id,
-      studyId: study[0].id,
+      studyId: study.id,
       direction: linkDirection,
       contradictionExplanation: isContradicting
         ? `New ingested paper claims opposite direction (${newClaim.direction} vs ${existing.direction}).`

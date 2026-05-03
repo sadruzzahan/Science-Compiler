@@ -122,16 +122,20 @@ export async function runIngestion(triggeredBy: "scheduler" | "manual" = "schedu
             );
 
             for (const claim of claims) {
-              const existing = await db.select({ id: claimsTable.id })
+              const normalizedText = claim.claimText.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120);
+              const existing = await db.select({ id: claimsTable.id, claimText: claimsTable.claimText })
                 .from(claimsTable)
                 .where(and(
                   eq(claimsTable.paperId, insertedPaper.id),
                   eq(claimsTable.direction, claim.direction),
                   eq(claimsTable.population, claim.population),
                 ))
-                .limit(1);
+                .limit(10);
+              const isDuplicate = existing.some(e =>
+                e.claimText.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120) === normalizedText
+              );
 
-              if (existing.length > 0) {
+              if (isDuplicate) {
                 logger.debug({ claimText: claim.claimText, paperId: insertedPaper.id }, "Skipping duplicate claim");
                 continue;
               }
