@@ -19,6 +19,7 @@ import {
   enforceSynthesisQuota,
   preflightBudgetForSse,
   enforceBudget,
+  recordSynthRequest,
 } from "../lib/usage";
 import { tryAcquireStream, releaseStream, getSseCap } from "../lib/sseCap";
 
@@ -297,6 +298,9 @@ router.get(
   "/query/synthesize",
   requireUser,
   synthesisRateLimit,
+  // Budget MUST run before quota so an exhausted global budget always
+  // returns 503 BUDGET_EXHAUSTED — even for users who are also over quota.
+  enforceBudget,
   enforceSynthesisQuota,
   async (req, res): Promise<void> => {
     // SSE endpoint: frontend uses fetch+ReadableStream (not EventSource) so
@@ -317,6 +321,9 @@ router.get(
     if (!(await preflightBudgetForSse(req, res))) return;
 
     const userId = req.currentUser!.id;
+    // Mark this as one quota-counted synthesis request now that all gates
+    // (rate limit, budget, quota, input validation) have passed.
+    await recordSynthRequest(userId, "synthesize", req.id ? String(req.id) : null);
     if (!tryAcquireStream(userId)) {
       res.setHeader("Retry-After", "5");
       res.status(429).json({
@@ -447,8 +454,10 @@ router.post(
       return;
     }
     try {
+      const userId = req.currentUser!.id;
+      await recordSynthRequest(userId, "verify", req.id ? String(req.id) : null);
       const result = await verifyClaimText(claim, {
-        userId: req.currentUser!.id,
+        userId,
         requestId: req.id ? String(req.id) : null,
       });
       res.json(result);

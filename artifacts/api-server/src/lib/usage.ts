@@ -106,18 +106,55 @@ function retryAfterSeconds(target: Date, now: Date = new Date()): number {
 // Aggregations
 // ---------------------------------------------------------------------------
 
+/**
+ * Sentinel route value written exactly once per user-facing synthesis or
+ * verify request. Quota counting filters on this so a single synthesis that
+ * fans out to embedding + chat completion still counts as ONE quota slot,
+ * not two — matching the "X/Y syntheses today" UI contract.
+ */
+export const SYNTH_REQUEST_ROUTE_PREFIX = "request:";
+
 export async function getDailyUsageCountForUser(userId: string, now: Date = new Date()): Promise<number> {
   const start = utcDayStart(now);
   try {
     const [row] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(usageEventsTable)
-      .where(and(eq(usageEventsTable.userId, userId), gte(usageEventsTable.createdAt, start)));
+      .where(
+        and(
+          eq(usageEventsTable.userId, userId),
+          gte(usageEventsTable.createdAt, start),
+          // Only count user-facing request markers, not every fan-out LLM call.
+          sql`${usageEventsTable.route} LIKE ${SYNTH_REQUEST_ROUTE_PREFIX + "%"}`,
+        ),
+      );
     return row?.count ?? 0;
   } catch (err) {
     logger.warn({ err, userId }, "getDailyUsageCountForUser failed; defaulting to 0");
     return 0;
   }
+}
+
+/**
+ * Insert a single zero-cost row that marks one user-facing synth/verify
+ * request. Called from the route handler AFTER quota+budget pass, so the
+ * count reflects requests we actually agreed to serve.
+ */
+export async function recordSynthRequest(
+  userId: string,
+  routeTag: "synthesize" | "verify",
+  requestId: string | null,
+): Promise<void> {
+  void persistUsageRow({
+    userId,
+    route: `${SYNTH_REQUEST_ROUTE_PREFIX}${routeTag}`,
+    model: "n/a",
+    requestId: requestId ?? null,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+    failed: false,
+  });
 }
 
 export async function getDailyTotalCostUsd(now: Date = new Date()): Promise<number> {

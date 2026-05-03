@@ -7,5 +7,9 @@
  */
 
 export type QueryKnowledgeBaseParams = {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
   q: string;
 };

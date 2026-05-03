@@ -601,6 +601,8 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
+            maxLength: 500
       responses:
         "200":
           description: Query result with best-matching synthesis
@@ -639,6 +641,8 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
+            maxLength: 500
           description: The research question to synthesize
       responses:
         "200":
@@ -1992,6 +1996,8 @@ components:
           type: integer
         pubmedQuery:
           type: string
+          minLength: 1
+          maxLength: 200
         maxPapersPerRun:
           type: ["integer", "null"]
         enabled:
@@ -2005,6 +2011,7 @@ components:
       properties:
         pubmedQuery:
           type: ["string", "null"]
+          maxLength: 200
         maxPapersPerRun:
           type: ["integer", "null"]
         enabled:
@@ -2032,6 +2039,8 @@ components:
       properties:
         claim:
           type: string
+          minLength: 1
+          maxLength: 500
       required: [claim]
 
     StudySummary:

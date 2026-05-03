@@ -7,5 +7,9 @@
  */
 
 export interface VerifyClaimBody {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
   claim: string;
 }

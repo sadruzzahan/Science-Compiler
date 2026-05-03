@@ -9,6 +9,8 @@
 export type SynthesizeQuestionParams = {
   /**
    * The research question to synthesize
+   * @minLength 1
+   * @maxLength 500
    */
   q: string;
 };

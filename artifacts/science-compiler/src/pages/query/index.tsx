@@ -31,6 +31,7 @@ import {
   Check,
 } from "lucide-react";
 import { ConsensusBadge, EvidenceQualityBadge } from "@/components/badges";
+import { QuotaExhaustedAlert } from "@/components/usage-status";
 
 interface StudySummary {
   claimText: string;
@@ -465,6 +466,8 @@ export default function QueryPage() {
           <Link href="/" className="text-foreground hover:underline">Ask your own question →</Link>
         </div>
       )}
+
+      {!sharedId && <QuotaExhaustedAlert />}
 
       {!sharedId && <form onSubmit={handleSubmit} className="mb-4">
         <div className="flex gap-3">

@@ -684,8 +684,10 @@ export const DeleteStudyParams = zod.object({
 /**
  * @summary Query the knowledge base with natural language
  */
+export const queryKnowledgeBaseQueryQMax = 500;
+
 export const QueryKnowledgeBaseQueryParams = zod.object({
-  q: zod.coerce.string(),
+  q: zod.coerce.string().min(1).max(queryKnowledgeBaseQueryQMax),
 });
 
 export const QueryKnowledgeBaseResponse = zod.object({
@@ -873,8 +875,14 @@ export const GetRecentActivityResponse = zod.object({
 
  * @summary AI synthesis of a research question — streams SSE events
  */
+export const synthesizeQuestionQueryQMax = 500;
+
 export const SynthesizeQuestionQueryParams = zod.object({
-  q: zod.coerce.string().describe("The research question to synthesize"),
+  q: zod.coerce
+    .string()
+    .min(1)
+    .max(synthesizeQuestionQueryQMax)
+    .describe("The research question to synthesize"),
 });
 
 /**
@@ -932,8 +940,10 @@ export const GetSharedSynthesisResponse = zod.object({
 /**
  * @summary Verify a plain-text claim against the knowledge base
  */
+export const verifyClaimBodyClaimMax = 500;
+
 export const VerifyClaimBody = zod.object({
-  claim: zod.string(),
+  claim: zod.string().min(1).max(verifyClaimBodyClaimMax),
 });
 
 export const VerifyClaimResponse = zod.object({
@@ -1081,9 +1091,11 @@ export const ListIngestionConfigsResponse = zod.array(
 /**
  * @summary Create a new ingestion config
  */
+export const createIngestionConfigBodyPubmedQueryMax = 200;
+
 export const CreateIngestionConfigBody = zod.object({
   topicId: zod.number(),
-  pubmedQuery: zod.string(),
+  pubmedQuery: zod.string().min(1).max(createIngestionConfigBodyPubmedQueryMax),
   maxPapersPerRun: zod.number().nullish(),
   enabled: zod.number().nullish(),
   llmModel: zod.string().nullish(),
@@ -1096,8 +1108,13 @@ export const UpdateIngestionConfigParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const updateIngestionConfigBodyPubmedQueryMax = 200;
+
 export const UpdateIngestionConfigBody = zod.object({
-  pubmedQuery: zod.string().nullish(),
+  pubmedQuery: zod
+    .string()
+    .max(updateIngestionConfigBodyPubmedQueryMax)
+    .nullish(),
   maxPapersPerRun: zod.number().nullish(),
   enabled: zod.number().nullish(),
   llmModel: zod.string().nullish(),

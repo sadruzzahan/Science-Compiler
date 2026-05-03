@@ -37,6 +37,37 @@ export function QuotaChip() {
 }
 
 /**
+ * Inline alert shown above the synthesize input when the user has used
+ * their full daily quota. Calls out the exact reset time so users don't
+ * have to dig into the user-menu chip to understand why submit is blocked.
+ */
+export function QuotaExhaustedAlert() {
+  const { data } = useUsageMe();
+  if (!data) return null;
+  const { syntheses } = data;
+  // Hide for unlimited plans (admin) and while still under the cap.
+  if (syntheses.dailyLimit == null) return null;
+  if ((syntheses.remaining ?? 0) > 0) return null;
+
+  const reset = new Date(syntheses.resetAtUtc);
+  return (
+    <div
+      role="alert"
+      data-testid="quota-exhausted-alert"
+      className="mb-4 rounded-md border border-amber-400/40 bg-amber-100/50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 flex items-start gap-2"
+    >
+      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+      <div>
+        <strong className="font-semibold">Daily synthesis limit reached.</strong>{" "}
+        You've used all {syntheses.dailyLimit} of your daily syntheses. Your quota
+        resets at <span className="font-medium">{reset.toLocaleString()}</span>{" "}
+        (start of the next UTC day).
+      </div>
+    </div>
+  );
+}
+
+/**
  * Site-wide banner shown when the global LLM spend cap is exhausted, so
  * users immediately understand why synthesis is unavailable.
  */

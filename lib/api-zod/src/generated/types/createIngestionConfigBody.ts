@@ -8,6 +8,10 @@
 
 export interface CreateIngestionConfigBody {
   topicId: number;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
   pubmedQuery: string;
   /** @nullable */
   maxPapersPerRun?: number | null;

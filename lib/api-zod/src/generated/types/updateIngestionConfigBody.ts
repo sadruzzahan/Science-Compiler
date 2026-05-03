@@ -7,7 +7,10 @@
  */
 
 export interface UpdateIngestionConfigBody {
-  /** @nullable */
+  /**
+   * @maxLength 200
+   * @nullable
+   */
   pubmedQuery?: string | null;
   /** @nullable */
   maxPapersPerRun?: number | null;

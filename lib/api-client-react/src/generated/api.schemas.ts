@@ -599,6 +599,10 @@ export interface IngestionConfig {
 
 export interface CreateIngestionConfigBody {
   topicId: number;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
   pubmedQuery: string;
   /** @nullable */
   maxPapersPerRun?: number | null;
@@ -609,7 +613,10 @@ export interface CreateIngestionConfigBody {
 }
 
 export interface UpdateIngestionConfigBody {
-  /** @nullable */
+  /**
+   * @maxLength 200
+   * @nullable
+   */
   pubmedQuery?: string | null;
   /** @nullable */
   maxPapersPerRun?: number | null;
@@ -631,6 +638,10 @@ export interface TriggerIngestionResponse {
 }
 
 export interface VerifyClaimBody {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
   claim: string;
 }
 
@@ -846,12 +857,18 @@ export type ListClaimsParams = {
 };
 
 export type QueryKnowledgeBaseParams = {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
   q: string;
 };
 
 export type SynthesizeQuestionParams = {
   /**
    * The research question to synthesize
+   * @minLength 1
+   * @maxLength 500
    */
   q: string;
 };
