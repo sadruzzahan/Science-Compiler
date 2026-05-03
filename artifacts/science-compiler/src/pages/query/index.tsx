@@ -311,7 +311,10 @@ function VerifySection() {
 function ShareButton({ shareId }: { shareId: string }) {
   const [copied, setCopied] = useState(false);
   async function handleShare() {
-    const url = `${window.location.origin}${window.location.pathname}?synthesis=${shareId}`;
+    // Canonicalize to the app root so shared URLs always look the same
+    // regardless of which sub-path the sharer was on.
+    const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "") || "";
+    const url = `${window.location.origin}${base}/?synthesis=${shareId}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
