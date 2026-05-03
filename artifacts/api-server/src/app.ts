@@ -11,6 +11,7 @@ import {
 import { attachUser } from "./middlewares/auth";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
+import { generalRateLimit } from "./lib/rateLimits";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -33,7 +34,9 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 // Webhooks must be mounted with raw body parser before express.json().
-app.use("/api", webhooksRouter);
+// Apply the general limiter here too so the webhook surface gets the same
+// abuse protection as the rest of /api (Task #11 — limiter coverage).
+app.use("/api", generalRateLimit, webhooksRouter);
 
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
