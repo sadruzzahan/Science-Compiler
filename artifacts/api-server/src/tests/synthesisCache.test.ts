@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import {
   getCachedSynthesis,
   cacheSynthesis,
+  getSynthesisByShareId,
   questionHash,
   _resetSynthesisMemoryCacheForTests,
   type SynthesisResult,
@@ -71,6 +72,37 @@ describe("Synthesis DB cache", () => {
     await cacheSynthesis(updated);
     const retrieved = await getCachedSynthesis(TEST_QUESTION);
     expect(retrieved!.synthesisText).toBe("Updated synthesis.");
+  });
+
+  it("getSynthesisByShareId returns null for unknown ids and works for valid opaque ids", async () => {
+    const missing = await getSynthesisByShareId("doesnotexist01");
+    expect(missing).toBeNull();
+
+    await cacheSynthesis(MOCK_RESULT);
+    const id = MOCK_RESULT.shareId!;
+    expect(id).toMatch(/^[A-Za-z0-9]{8}$/);
+    const found = await getSynthesisByShareId(id);
+    expect(found).not.toBeNull();
+    expect(found!.question).toBe(TEST_QUESTION);
+    expect(found!.shareId).toBe(id);
+  });
+
+  it("getSynthesisByShareId still returns the result after the cache TTL has expired (permanent links)", async () => {
+    await cacheSynthesis(MOCK_RESULT);
+    const id = MOCK_RESULT.shareId!;
+    // Force expiry on the persisted row.
+    await db
+      .update(questionSynthesisTable)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(questionSynthesisTable.shareId, id));
+
+    // Cache lookup should miss (expired)…
+    _resetSynthesisMemoryCacheForTests();
+    expect(await getCachedSynthesis(TEST_QUESTION)).toBeNull();
+    // …but share lookup must still succeed — the row must NOT have been deleted.
+    const shared = await getSynthesisByShareId(id);
+    expect(shared).not.toBeNull();
+    expect(shared!.shareId).toBe(id);
   });
 
   it("assigns a stable shareId on first cache and preserves it across upserts", async () => {

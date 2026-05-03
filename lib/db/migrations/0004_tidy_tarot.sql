@@ -3,11 +3,26 @@
 -- in schema.ts (its `.op("vector_cosine_ops")` form breaks table inference),
 -- but the index must be preserved.
 
--- Add share_id as nullable, backfill existing rows with deterministic
--- per-row ids derived from the row's serial PK (guaranteed unique — no
--- collision risk regardless of row count), then enforce NOT NULL + UNIQUE.
--- New rows will use api-server-generated nanoids in the customAlphabet form.
+-- Add share_id as nullable, backfill existing rows with cryptographically
+-- random opaque ids (10 hex chars from gen_random_uuid() — ~40 bits entropy)
+-- using a per-row retry loop to avoid the vanishingly small chance of
+-- collision against the unique constraint, then enforce NOT NULL + UNIQUE.
+-- New rows will use api-server-generated nanoids in a URL-safe customAlphabet.
 ALTER TABLE "question_synthesis" ADD COLUMN "share_id" text;--> statement-breakpoint
-UPDATE "question_synthesis" SET "share_id" = 'leg' || lpad(id::text, 5, '0') WHERE "share_id" IS NULL;--> statement-breakpoint
+DO $$
+DECLARE
+  r RECORD;
+  candidate TEXT;
+BEGIN
+  FOR r IN SELECT id FROM "question_synthesis" WHERE "share_id" IS NULL LOOP
+    LOOP
+      candidate := substr(replace(gen_random_uuid()::text, '-', ''), 1, 10);
+      EXIT WHEN NOT EXISTS (
+        SELECT 1 FROM "question_synthesis" WHERE "share_id" = candidate
+      );
+    END LOOP;
+    UPDATE "question_synthesis" SET "share_id" = candidate WHERE id = r.id;
+  END LOOP;
+END $$;--> statement-breakpoint
 ALTER TABLE "question_synthesis" ALTER COLUMN "share_id" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "question_synthesis" ADD CONSTRAINT "question_synthesis_share_id_unique" UNIQUE("share_id");
